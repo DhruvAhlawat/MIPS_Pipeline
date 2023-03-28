@@ -1,6 +1,6 @@
 # MIPS Processor
 
-This code is the starter code for Assignment 2 of the 2023 spring offering of the Computer Architecture course (2202-COL216).
+This code is the starter code for Assignment 2 of the 2023 spring offering of the Computer Architecture 
 
 ## Files
 - `MIPS_Processor.hpp` contains the implementation of the instruction parser and a non-pipelined implementation of the MIPS processor.
