@@ -16,8 +16,12 @@
 #include <iostream>
 #include <boost/tokenizer.hpp>
 
+using namespace std;
+
+
 struct MIPS_Architecture
 {
+	public:
 	int registers[32] = {0}, PCcurr = 0, PCnext;
 	std::unordered_map<std::string, std::function<int(MIPS_Architecture &, std::string, std::string, std::string)>> instructions;
 	std::unordered_map<std::string, int> registerMap, address;
@@ -62,6 +66,10 @@ struct MIPS_Architecture
 		constructCommands(file);
 		commandCount.assign(commands.size(), 0);
 	}
+
+
+	
+
 
 	// perform add operation
 	int add(std::string r1, std::string r2, std::string r3)
@@ -224,7 +232,7 @@ struct MIPS_Architecture
 	{
 		return str.size() > 0 && isalpha(str[0]) && all_of(++str.begin(), str.end(), [](char c)
 														   { return (bool)isalnum(c); }) &&
-			   instructions.find(str) == instructions.end();
+			   instructions.find(str) == instructions.end(); //shouold probably be !=
 	}
 
 	// checks if the register is a valid one
@@ -397,6 +405,216 @@ struct MIPS_Architecture
 		handleExit(SUCCESS, clockCycles);
 	}
 
+	struct IFID //basically the L2 flipflop, used to transfer values between IF and ID stage
+	{
+		vector<string> currentCommand = {};
+		vector<string> nextCommand = {};
+		IFID()
+		{
+			currentCommand = {"","$t0","$t0","$t0","$t0"};
+			nextCommand = currentCommand;
+		}
+		void Update()
+		{
+			currentCommand = nextCommand; 
+			nextCommand = {};
+		}
+	};
+
+	struct IF
+	{
+		public:
+		MIPS_Architecture *arch;
+		IFID *L2; //L2 flipflop or register
+		int address;
+		vector<string> CurCommand; //the current command after reading the address
+		
+		IF(MIPS_Architecture *architecture, IFID *l2)
+		{
+			arch = architecture; L2 = l2;
+		}
+		void run()
+		{
+			address = arch->PCcurr;
+			CurCommand = arch->commands[address]; //updates to this address
+			L2->nextCommand = CurCommand; //updates the value in the L2 at the same time, but for the next time
+		}
+	};
+
+	int instructionNumber(string s)
+	{
+		if(s == "add" || s == "and" || s == "sub" || s == "mult" || s == "or" || s == "slt")
+			return 0;
+		else if(s == "addi" || s == "andi" || s == "ori" || s == "srl" || s == "sll")
+			return 1;
+		else if(s == "lw" || s == "sw")
+			return 2;
+		return 3;
+	}
+
+	struct IDEX //the L3 register lying between ID and EX
+	{
+		vector<int> curData, nextData;
+		string curWriteReg = "", nextWriteReg = "";
+		string curInstructionType = "", nextInstructionType = "";
+		string curAddr = "", nextAddr = "";
+		void Update()
+		{
+			//on getting the updated values, we can run the code
+			curData = nextData; curAddr = nextAddr;
+			curInstructionType = nextInstructionType; curWriteReg = nextWriteReg;
+			
+			nextInstructionType = ""; //this would ensure that if instruction
+			// type does not get updated, then we won't run any new commands in the case of stall
+			
+		}
+        
+	};
+
+	struct ID
+	{
+		public:
+		MIPS_Architecture *arch;
+		IFID* L2;
+		IDEX *L3;
+		string r[3] = {0}; //r[0] is the written to register, r[1] and r[2] are the using registers, they can be null
+		vector<int>dataValues = vector<int>(2,0); //to be passed onto the EX stage for computation
+		string instructionType = "";
+		string addr;
+		vector<string> curCommand;
+		ID(MIPS_Architecture *architecture, IFID *ifid, IDEX *idex)
+		{
+			arch = architecture;
+			L2 = ifid;
+			L3 = idex;
+		}
+		void run()
+		{
+			curCommand = L2->currentCommand; //we get the command from the L2 flipflop between IF and ID
+			//on the basis of the commands we got, we can assign further
+			if(curCommand.size() == 0) return;
+			else if(curCommand[0] == "") return;
+			instructionType = curCommand[0];
+			for (int i = 1; i < 4 && i < curCommand.size(); i++)
+			{
+				if(curCommand[i] != "") 
+				r[i-1] = curCommand[i];
+			}
+			int curInstruction = arch->instructionNumber(instructionType);
+			if(curInstruction == 0) //then r2 and r3 need to be added/subtracted/whatever
+			{
+				dataValues[0] = arch->registers[arch->registerMap[r[1]]];
+				dataValues[1] = arch->registers[arch->registerMap[r[2]]];
+			}
+			else if(curInstruction == 1)
+			{
+				dataValues[0] = arch->registers[arch->registerMap[r[1]]];
+				dataValues[1] = stoi(r[2]); //since this in string form and not a register
+			}
+			else //for lw and sw to be written LATER
+			{
+				addr = r[1]; //r[2] is just blank in this case
+			}
+			UpdateL3();
+		}
+		
+		void UpdateL3()
+		{
+			//on getting the updated values, we can run the code
+			L3->nextData = dataValues;
+			L3->nextInstructionType = instructionType;
+			L3->nextWriteReg = r[0];
+			L3->nextAddr = addr;
+		}
+	};
+
+	struct EX
+	{
+		public:
+		string instructionType;
+		int data1, data2; 
+		int output;
+		string r1; //register to be written into
+		//now we decode the instruction from the instructions map
+		EX(string InstructionType, string R1, int Data1, int Data2)
+		{
+			instructionType = InstructionType;
+			r1 = R1;
+			data1 = Data1;
+			data2 = Data2;
+
+		}
+
+		void run()
+		{
+			
+		}
+
+	};
+    
+	struct DMWB{
+            string currRegister = "";
+			string nextRegister = "";
+			int curr_data;
+            int next_data;
+			void Update(){
+				 currRegister = nextRegister;    //on getting the updated value we can run the code
+				 nextRegister = "";
+				 curr_data = next_data;
+				 next_data = 0;
+			}
+	};
+
+
+    struct WB{
+          public:
+		  string r2;
+		  int new_data;
+		  MIPS_Architecture *newarch;
+		  DMWB* L5;
+		  WB(MIPS_Architecture *a,DMWB *dmwb){
+             newarch = a;
+			 L5 = dmwb;
+		  }
+        void run(){
+             r2 = L5->currRegister;
+			 new_data  = L5->curr_data;
+			 if(r2!="")
+			 newarch->registers[newarch->registerMap[r2]] = new_data;
+		}
+    };
+
+
+	void ExecutePipelined()
+	{
+		if (commands.size() >= MAX / 4)
+		{
+			handleExit(MEMORY_ERROR, 0);
+			return;
+		} //memory error
+
+		int clockCycles = 0;
+		//first we instantiate the stages
+		IFID L2;
+		IDEX L3 = IDEX();
+		IF fetch(this, &L2); //fetch is the IF stage
+		ID Decode(this,&L2, &L3); //Decode is the ID stage
+
+		while(PCcurr < commands.size())
+		{
+			fetch.run();
+		// 	//Decode.run();
+
+		// 	//L2.Update(); L3.Update(); //updated the intermittent registers/Flipflops
+		// 	clockCycles++; 
+		// 	++commandCount[PCcurr];
+			PCcurr = PCnext;
+			PCnext++;
+		}
+		handleExit(SUCCESS, clockCycles);
+
+	}
+
 	// print the register data in hexadecimal
 	void printRegisters(int clockCycle)
 	{
@@ -406,6 +624,7 @@ struct MIPS_Architecture
 			std::cout << registers[i] << ' ';
 		std::cout << std::dec << '\n';
 	}
+
 };
 
 #endif
