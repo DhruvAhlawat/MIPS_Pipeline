@@ -790,10 +790,14 @@ struct MIPS_Architecture
 		while(WriteBack.isWorking)
 		{
 			WriteBack.run();
-			fetch.run();
+				fetch.run();
 			Decode.run();
-			ALU.run(); 
+			ALU.run();
+			
 			DataMemory.run();
+			 
+		
+			
 			
 			L2.Update(); L3.Update(); L4.Update(); L5.Update(); //updated the intermittent latches
 			clockCycles++; 
