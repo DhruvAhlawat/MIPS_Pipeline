@@ -442,7 +442,7 @@ struct MIPS_Architecture
 		handleExit(SUCCESS, clockCycles);
 	}
 
-	map<string,int> DataHazards;
+	// map<string> DataHazards;
 
 
 	struct IFID //basically the L2 flipflop, used to transfer values between IF and ID stage
@@ -630,7 +630,7 @@ struct MIPS_Architecture
 			isWorking = L3->curIsWorking;
 			if(!isWorking)
 			{
-				L4->nextIsWorking = false;
+				L4->curIsWorking = false;
 			}
 			dataValues = L3->curData; iType = L3->curInstructionType; 
 			r1 = L3->curWriteReg; 
@@ -714,7 +714,6 @@ struct MIPS_Architecture
 
 			if(reg == "")
 			{
-				L5->next_data = -1; L5->nextRegister = "";
 				return; //nothing to do here
 			}
 
@@ -729,9 +728,7 @@ struct MIPS_Architecture
 			{
 				//we must read from the memory into the register, so
 				if(memWrite == 0)
-				{
-					dataIn = arch->data[dataIn];  cout << " wrote value of address to next latch ";
-				}
+					dataIn = arch->data[dataIn]; 
 				//if memWrite is instead -1, then we simply pass on the value of dataIn directly.
 				L5->nextRegister = reg;
 				L5->next_data = dataIn; 
@@ -755,10 +752,6 @@ struct MIPS_Architecture
 		}
         void run(){
 			isWorking = L5->curIsWorking;
-			// if(!isWorking)
-			// {
-			// 	return;
-			// }
             r2 = L5->currRegister;
 			new_data  = L5->curr_data;
 			cout << " |WB|=> ";
@@ -797,12 +790,10 @@ struct MIPS_Architecture
 		while(WriteBack.isWorking)
 		{
 			WriteBack.run();
-			DataMemory.run();
-			ALU.run(); 
-			Decode.run();
 			fetch.run();
-		
-			
+			Decode.run();
+			ALU.run(); 
+			DataMemory.run();
 			
 			L2.Update(); L3.Update(); L4.Update(); L5.Update(); //updated the intermittent latches
 			clockCycles++; 
