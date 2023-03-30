@@ -22,7 +22,7 @@ using namespace std;
 struct MIPS_Architecture
 {
 	public:
-	int registers[32] = {0}, PCcurr = 0, PCnext;
+	int registers[32] = {0}, PCcurr = 0, PCnext = 1;
 	std::unordered_map<std::string, std::function<int(MIPS_Architecture &, std::string, std::string, std::string)>> instructions;
 	std::unordered_map<std::string, int> registerMap, address;
 	static const int MAX = (1 << 20);
@@ -411,7 +411,7 @@ struct MIPS_Architecture
 		vector<string> nextCommand = {};
 		IFID()
 		{
-			currentCommand = {"","$t0","$t0","$t0","$t0"};
+			currentCommand = {"","$t0","$t0","$t0"};
 			nextCommand = currentCommand;
 		}
 		void Update()
@@ -435,6 +435,8 @@ struct MIPS_Architecture
 		}
 		void run()
 		{
+			if(arch->PCcurr >= arch->commands.size())
+				return; //since we must be done with all the commands at this point
 			address = arch->PCcurr;
 			CurCommand = arch->commands[address]; //updates to this address
 			L2->nextCommand = CurCommand; //updates the value in the L2 at the same time, but for the next time
@@ -478,7 +480,7 @@ struct MIPS_Architecture
 		MIPS_Architecture *arch;
 		IFID* L2;
 		IDEX *L3;
-		string r[3] = {0}; //r[0] is the written to register, r[1] and r[2] are the using registers, they can be null
+		string r[3] = {""}; //r[0] is the written to register, r[1] and r[2] are the using registers, they can be null
 		vector<int>dataValues = vector<int>(2,0); //to be passed onto the EX stage for computation
 		string instructionType = "";
 		string addr;
@@ -489,13 +491,14 @@ struct MIPS_Architecture
 			L2 = ifid;
 			L3 = idex;
 		}
+
 		void run()
 		{
 			curCommand = L2->currentCommand; //we get the command from the L2 flipflop between IF and ID
 			//on the basis of the commands we got, we can assign further
 			if(curCommand.size() == 0) return;
 			else if(curCommand[0] == "") return;
-			
+
 			instructionType = curCommand[0];
 			for (int i = 1; i < 4 && i < curCommand.size(); i++)
 			{
@@ -533,27 +536,91 @@ struct MIPS_Architecture
 	struct EX
 	{
 		public:
-		string instructionType;
-		int data1, data2; 
-		int output;
-		string r1; //register to be written into
+		MIPS_Architecture *arch; IDEX *L3; //The L3 Latch
+		string iType = "";
+		vector<int> dataValues; 
+		int result = 0;
+		string addr; //possible address that we can calculate using LocateAddress
+		string r1; //register to be written into, this will not be used in this step but passed forward till the WriteBack stage where it will be written into
 		//now we decode the instruction from the instructions map
-		EX(string InstructionType, string R1, int Data1, int Data2)
+		EX(MIPS_Architecture *architecture, IDEX *l3)
 		{
-			instructionType = InstructionType;
-			r1 = R1;
-			data1 = Data1;
-			data2 = Data2;
-
+			arch = architecture; L3 = l3; //the latch reference and architecture reference is stored at initialization
+			dataValues = vector<int>(2,0);
 		}
 
 		void run()
 		{
-			
+			dataValues = L3->curData; iType = L3->curInstructionType; 
+			addr = L3->curAddr; r1 = L3->curWriteReg; 
+			result = calc(); 
+			cout << result << " ";
+		}
+
+		int calc()
+		{
+			if(iType == "") return -1;
+			if(iType == "add" || iType == "addi")
+				return dataValues[0] + dataValues[1];
+			else if(iType == "sub")
+				return dataValues[0] - dataValues[1];
+			else if(iType == "mult")
+				return dataValues[0] * dataValues[1];
+			else if(iType == "and" || iType == "andi")
+				return (dataValues[0] & dataValues[1]);
+			else if(iType == "or" || iType == "ori")
+				return (dataValues[0] | dataValues[1]);
+			else if(iType == "srl")
+				return (dataValues[0] >> dataValues[1]);
+			else if(iType == "sll")
+				return (dataValues[0] << dataValues[1]);
+			else if(iType == "slt")
+				return (dataValues[0] < dataValues[1]); 
+			else  											//because otherwise it must be a lw or sw instruction
+				return arch->locateAddress(addr);
 		}
 
 	};
 
+	struct EXDM
+	{
+		string curAddr, curReg, nextAddr, nextReg;
+		int curDataIn, nextDataIn;
+		bool curMemWrite, nextMemWrite = true;
+
+		void Update()
+		{
+			curAddr = nextAddr; curReg = nextReg;
+			curMemWrite = nextMemWrite; curDataIn = nextDataIn;
+
+			nextAddr = ""; nextReg = "";
+		}
+	};
+
+	struct DM
+	{
+		public:
+		MIPS_Architecture *arch; EXDM *L4; //the references to architecture and the L4 Latch 
+		string addr;	//when addr is null, then we assume no DM stage to be applied
+		string reg;
+		bool memWrite;  //when memWrite is true, then we write from register into the memory
+						//when memWrite is false. then we read from memory into register, so it is passed onto the WB stage to do that
+						
+		int dataIn;
+		DM(MIPS_Architecture *architecture, EXDM *exdm)
+		{
+			arch = architecture; L4 = exdm; 
+		}
+		
+		void run()
+		{
+			addr = L4->curAddr; reg = L4->curReg; memWrite = L4->curMemWrite; dataIn = L4->curDataIn;
+			//updated all the values using the latch L4
+			
+
+		}
+
+	};
 
 	void ExecutePipelined()
 	{
@@ -566,20 +633,23 @@ struct MIPS_Architecture
 		int clockCycles = 0;
 		//first we instantiate the stages
 		IFID L2;
-		IDEX L3 = IDEX();
+		IDEX L3;
+		L2.currentCommand = {"","","",""};
 		IF fetch(this, &L2); //fetch is the IF stage
 		ID Decode(this,&L2, &L3); //Decode is the ID stage
-
-		while(PCcurr < commands.size())
+		EX ALU(this, &L3);
+		while(PCcurr < commands.size()+3)
 		{
 			fetch.run();
-		// 	//Decode.run();
+			Decode.run();
+			ALU.run();
 
-		// 	//L2.Update(); L3.Update(); //updated the intermittent registers/Flipflops
-		// 	clockCycles++; 
-		// 	++commandCount[PCcurr];
+			L2.Update(); L3.Update(); //updated the intermittent registers/Flipflops
+			clockCycles++; 
+			++commandCount[PCcurr];
 			PCcurr = PCnext;
 			PCnext++;
+			cout << endl << " at clockCycles " << clockCycles << endl;
 		}
 		handleExit(SUCCESS, clockCycles);
 
