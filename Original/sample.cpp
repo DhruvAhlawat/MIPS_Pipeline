@@ -17,6 +17,6 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	mips->executeCommandsUnpipelined();
+	mips->ExecutePipelined();
 	return 0;
 }
