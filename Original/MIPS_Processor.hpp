@@ -176,6 +176,35 @@ struct MIPS_Architecture
 		return 0;
 	}
 
+	pair<int,string> decodeAddress(string addr)
+	{
+		if(addr.back() == ')')
+		{
+			try
+			{
+				int lparen = addr.find('('), offset = stoi(lparen == 0 ? "0" : addr.substr(0, lparen));
+				std::string reg = addr.substr(lparen + 1);
+				reg.pop_back();
+				return {offset, reg};
+			}
+			catch (std::exception &e)
+			{
+				return {-4,""};
+			}
+		}
+		try
+		{
+			int address = stoi(addr);
+			if (address % 4 || address >= MAX)
+				return {-3,"$0"};
+			return {address/4, "$0"};
+		}
+		catch (std::exception &e)
+		{
+			return {-4, "$0"};
+		}
+	}
+
 	int locateAddress(std::string location)
 	{
 		if (location.back() == ')')
@@ -186,10 +215,16 @@ struct MIPS_Architecture
 				std::string reg = location.substr(lparen + 1);
 				reg.pop_back();
 				if (!checkRegister(reg))
+				{	
 					return -3;
+				}
+					
 				int address = registers[registerMap[reg]] + offset;
-				if (address % 4 || address < int(4 * commands.size()) || address >= MAX)
+				if (address % 4 != 0 || address < (4 * commands.size()) || address >= MAX)
+				{	
 					return -3;
+				}
+					
 				return address / 4;
 			}
 			catch (std::exception &e)
@@ -238,6 +273,7 @@ struct MIPS_Architecture
 	// checks if the register is a valid one
 	inline bool checkRegister(std::string r)
 	{
+		
 		return registerMap.find(r) != registerMap.end();
 	}
 
@@ -468,12 +504,11 @@ struct MIPS_Architecture
 		vector<int> curData, nextData;
 		string curWriteReg = "", nextWriteReg = "";
 		string curInstructionType = "", nextInstructionType = "";
-		string curAddr = "", nextAddr = "";
 		bool curIsWorking = true, nextIsWorking = true;
 		void Update()
 		{
 			//on getting the updated values, we can run the code
-			curData = nextData; curAddr = nextAddr;
+			curData = nextData;
 			curInstructionType = nextInstructionType; curWriteReg = nextWriteReg;
 			curIsWorking = nextIsWorking;
 			nextInstructionType = ""; //this would ensure that if instruction
@@ -512,21 +547,10 @@ struct MIPS_Architecture
 			}
 			//on the basis of the commands we got, we can assign further
 			cout << " |ID|=> ";
-			if(curCommand.size() == 0) 
-			{
-				isWorking = false;
+			if(curCommand.size() == 0)
 				return;
-			}
 			else if(curCommand[0] == "")
-			{
-				isWorking = false;
 				return;
-			}
-			else
-			{
-				isWorking = true;
-			}
-
 			instructionType = curCommand[0];
 			cout << " decoded command as " << instructionType << " and ";
 			for (int i = 1; i < 4 && i < curCommand.size(); i++)
@@ -547,7 +571,9 @@ struct MIPS_Architecture
 			}
 			else //for lw and sw to be written LATER
 			{
-				addr = r[1]; //r[2] is just blank in this case
+				pair<int,string> res = arch->decodeAddress(r[1]);
+				dataValues[0] = res.first;
+				dataValues[1] = arch->registers[arch->registerMap[res.second]];				
 			}
 			cout << " passed " << dataValues[0] << " and " << dataValues[1] << " onto L3 latch ";
 			UpdateL3();
@@ -559,7 +585,6 @@ struct MIPS_Architecture
 			L3->nextData = dataValues;
 			L3->nextInstructionType = instructionType;
 			L3->nextWriteReg = r[0];
-			L3->nextAddr = addr;
 		}
 	};
 
@@ -588,7 +613,6 @@ struct MIPS_Architecture
 		string iType = "";
 		vector<int> dataValues; 
 		int result = 0;
-		string addr; //possible address that we can calculate using LocateAddress
 		string r1; //register to be written into, this will not be used in this step but passed forward till the WriteBack stage where it will be written into
 		//now we decode the instruction from the instructions map
 		EX(MIPS_Architecture *architecture, IDEX *l3, EXDM *l4)
@@ -605,19 +629,19 @@ struct MIPS_Architecture
 				L4->curIsWorking = false;
 			}
 			dataValues = L3->curData; iType = L3->curInstructionType; 
-			addr = L3->curAddr; r1 = L3->curWriteReg; 
+			r1 = L3->curWriteReg; 
 			result = calc(); 
 			L4->nextReg = r1; L4->nextDataIn = result; 
 			L4->nextMemWrite = (iType == "sw")? 1 : (iType == "lw") ? 0 : -1;
 			cout << " |EX|=> ";
 			if(iType != "")
-			cout << " did " << iType << " on operands " << dataValues[0] << " and " << dataValues[1] << " ";
+			cout << " did " << iType << " operation on " << dataValues[0] << " and " << dataValues[1] << " ";
 		}
 
 		int calc()
 		{
 			if(iType == "") return -1;
-			if(iType == "add" || iType == "addi")
+			if(iType == "add" || iType == "addi" || iType == "lw" || iType == "sw")
 				return dataValues[0] + dataValues[1];
 			else if(iType == "sub")
 				return dataValues[0] - dataValues[1];
@@ -631,10 +655,9 @@ struct MIPS_Architecture
 				return (dataValues[0] >> dataValues[1]);
 			else if(iType == "sll")
 				return (dataValues[0] << dataValues[1]);
-			else if(iType == "slt")
+			else  //if slt
 				return (dataValues[0] < dataValues[1]); 
-			else  											//because otherwise it must be a lw or sw instruction
-				return arch->locateAddress(addr);
+
 		}
 
 	};
@@ -684,11 +707,17 @@ struct MIPS_Architecture
 			reg = L4->curReg; memWrite = L4->curMemWrite; dataIn = L4->curDataIn;
 			cout << " |DM|=> ";
 			//updated all the values using the latch L4
+
+			if(reg == "")
+			{
+				return; //nothing to do here
+			}
+
 			if(memWrite == 1)
 			{
 				//then we write into the memory
 				arch->data[dataIn] = arch->registers[arch->registerMap[reg]]; 
-				cout << " wrote value of register " << reg << ":" << arch->registers[arch->registerMap[reg]] << " into memory at " << dataIn;
+				cout << " wrote value of " << reg << ":" << arch->registers[arch->registerMap[reg]] << " into memory at " << dataIn;
 				L5->next_data = -1; L5->nextRegister = ""; //since we dont need to write anything onto the register, the reg is passed as ""
 			}
 			else
@@ -725,7 +754,7 @@ struct MIPS_Architecture
 			if(r2 != "")
 			{
 				newarch->registers[newarch->registerMap[r2]] = new_data;
-				cout << "wrote " << new_data << " into register " << r2 << " ";
+				cout << "wrote " << new_data << " into reg " << r2 << " ";
 			}
 			
 		}
@@ -741,15 +770,16 @@ struct MIPS_Architecture
 			return;
 		} //memory error
 
+		registers[registerMap["$sp"]] = (4 * commands.size()); //initializes position of sp. assumes that all the commands are also stored in data and so sp needs to be here
 		int clockCycles = 0;
 		//first we instantiate the stages
-		IFID L2;
+		IFID L2; //The Latches
 		IDEX L3;
 		EXDM L4;
 		DMWB L5;
 		IF fetch(this, &L2); //fetch is the IF stage
 		ID Decode(this,&L2, &L3); //Decode is the ID stage
-		EX ALU(this, &L3, &L4);
+		EX ALU(this, &L3, &L4); //all are self explanatory actually
 		DM DataMemory(this,&L4,&L5);
 		WB WriteBack(this,&L5);
 
@@ -758,7 +788,7 @@ struct MIPS_Architecture
 			WriteBack.run();
 			fetch.run();
 			Decode.run();
-			ALU.run(); cout << "addr-> " << ALU.addr << "<- ";
+			ALU.run(); 
 			DataMemory.run();
 			
 			L2.Update(); L3.Update(); L4.Update(); L5.Update(); //updated the intermittent latches
