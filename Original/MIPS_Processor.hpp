@@ -579,7 +579,7 @@ struct MIPS_Architecture
         void run(){
              r2 = L5->currRegister;
 			 new_data  = L5->curr_data;
-			 if(r2!="")
+			 if(r2 != "")
 			 newarch->registers[newarch->registerMap[r2]] = new_data;
 		}
     };
