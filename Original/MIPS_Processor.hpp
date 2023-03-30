@@ -597,30 +597,84 @@ struct MIPS_Architecture
 		}
 	};
 
+
+	
+
+	struct DMWB{
+            string currRegister = "";
+			string nextRegister = "";
+			int curr_data;
+            int next_data;
+			void Update(){
+				 currRegister = nextRegister;    //on getting the updated value we can run the code
+				 nextRegister = "";
+				 curr_data = next_data;
+				 next_data = 0;
+			}
+	};
+
+
+
+
 	struct DM
 	{
 		public:
-		MIPS_Architecture *arch; EXDM *L4; //the references to architecture and the L4 Latch 
-		string addr;	//when addr is null, then we assume no DM stage to be applied
-		string reg;
-		bool memWrite;  //when memWrite is true, then we write from register into the memory
-						//when memWrite is false. then we read from memory into register, so it is passed onto the WB stage to do that
-						
-		int dataIn;
-		DM(MIPS_Architecture *architecture, EXDM *exdm)
+		MIPS_Architecture *arch; EXDM *L4; DMWB *L5; //the references to architecture and the L4 Latch 
+		string reg; 
+		int memWrite;  //when memWrite is 1, then we write from register into the memory
+						//when memWrite is 0. then we read from memory into register, so it is passed onto the WB stage to do that
+						//when it is -1, then we skip this stage and move onto the Writeback stage
+
+		int dataIn; 	//dataIn is an address if memWrite is 1 or 0, otherwise its value will be directly stored onto the register in WB stage
+		DM(MIPS_Architecture *architecture, EXDM *exdm, DMWB *dmwb)
 		{
-			arch = architecture; L4 = exdm; 
+			arch = architecture; L4 = exdm; L5 = dmwb; //initialisation
 		}
-		
+
 		void run()
 		{
-			addr = L4->curAddr; reg = L4->curReg; memWrite = L4->curMemWrite; dataIn = L4->curDataIn;
+			reg = L4->curReg; memWrite = L4->curMemWrite; dataIn = L4->curDataIn;
 			//updated all the values using the latch L4
-			
+			if(memWrite == 1)
+			{
+				//then we write into the memory
+				arch->data[dataIn] = arch->registers[arch->registerMap[reg]]; 
+
+			}
+			else
+			{
+				//we must read from the memory into the register, so
+				if(memWrite == 0)
+					dataIn = arch->data[dataIn]; 
+				//if memWrite is instead -1, then we simply pass on the value of dataIn directly.
+
+
+			}
 
 		}
 
 	};
+
+
+    struct WB{
+          public:
+		  string r2;
+		  int new_data;
+		  MIPS_Architecture *newarch;
+		  DMWB* L5;
+		  WB(MIPS_Architecture *a,DMWB *dmwb){
+             newarch = a;
+			 L5 = dmwb;
+		  }
+        void run(){
+             r2 = L5->currRegister;
+			 new_data  = L5->curr_data;
+			 if(r2 != "")
+			 newarch->registers[newarch->registerMap[r2]] = new_data;
+		}
+    };
+
+
 
 	void ExecutePipelined()
 	{
