@@ -443,12 +443,14 @@ struct MIPS_Architecture
 	}
 
 	// map<string> DataHazards;
+	map<string,int> DataHazards;
 
 
 	struct IFID //basically the L2 flipflop, used to transfer values between IF and ID stage
 	{
 		vector<string> currentCommand = {};
 		vector<string> nextCommand = {};
+		bool IDisStalling = false;
 		bool curIsWorking = true, nextIsWorking = true; 
 		IFID()
 		{
@@ -484,11 +486,15 @@ struct MIPS_Architecture
 				L2->nextIsWorking = false;
 				return; //since we must be done with all the commands at this point
 			} 
-				
-			address = arch->PCcurr;
-			cout << "Fetched Command No. " << arch->PCcurr;
-			CurCommand = arch->commands[address]; //updates to this address
-			L2->nextCommand = CurCommand; //updates the value in the L2 at the same time, but for the next time
+			if(L2->IDisStalling == false)
+			{
+				address = arch->PCcurr;
+				cout << "Fetched Command No. " << arch->PCcurr;
+				CurCommand = arch->commands[address]; //updates to this address
+				L2->nextCommand = CurCommand; //updates the value in the L2 at the same time, but for the next time
+				arch->PCcurr = arch->PCnext;
+				arch->PCnext++;
+			}
 		}
 	};
 
@@ -508,6 +514,7 @@ struct MIPS_Architecture
 		vector<int> curData, nextData;
 		string curWriteReg = "", nextWriteReg = "";
 		string curInstructionType = "", nextInstructionType = "";
+		
 		bool curIsWorking = true, nextIsWorking = true;
 		void Update()
 		{
@@ -526,6 +533,7 @@ struct MIPS_Architecture
 	{
 		public:
 		bool isWorking = true;
+		bool isStalling = false;
 		MIPS_Architecture *arch;
 		IFID* L2;
 		IDEX *L3;
@@ -543,8 +551,11 @@ struct MIPS_Architecture
 
 		void run()
 		{
-			curCommand = L2->currentCommand; //we get the command from the L2 flipflop between IF and ID
-			isWorking = L2->curIsWorking; 
+			if(!isStalling) //if it is stalling, then we do not update the current command and isWorking status
+			{
+				curCommand = L2->currentCommand; //we get the command from the L2 flipflop between IF and ID
+				isWorking = L2->curIsWorking; 
+			}
 			if(isWorking == false)
 			{
 				L3->nextIsWorking = false;
@@ -559,9 +570,23 @@ struct MIPS_Architecture
 			cout << " decoded command as " << instructionType << " and ";
 			for (int i = 1; i < 4 && i < curCommand.size(); i++)
 			{
-				if(curCommand[i] != "") 
 				r[i-1] = curCommand[i];
+				
 			}
+			
+			if(arch->DataHazards.count(r[0]) && arch->DataHazards[r[0]] < 5 || arch->DataHazards.count(r[1]))
+			{
+				isStalling = true;	//then we should stall this stage right now.
+				L2->IDisStalling = true;
+				return;				//in the stall stage, we will not do any updated to the L3 latch, 
+									//so the next values for the next stage will be the default blanks	
+			}else 
+			{	
+				L2->IDisStalling = false;
+				isStalling = false; 
+			}
+		
+
 			int curInstruction = arch->instructionNumber(instructionType);
 			if(curInstruction == 0) //then r2 and r3 need to be added/subtracted/whatever
 			{
@@ -790,10 +815,9 @@ struct MIPS_Architecture
 		while(WriteBack.isWorking)
 		{
 			WriteBack.run();
-				fetch.run();
+			fetch.run();
 			Decode.run();
 			ALU.run();
-			
 			DataMemory.run();
 			 
 		
@@ -802,8 +826,7 @@ struct MIPS_Architecture
 			L2.Update(); L3.Update(); L4.Update(); L5.Update(); //updated the intermittent latches
 			clockCycles++; 
 			++commandCount[PCcurr];
-			PCcurr = PCnext;
-			PCnext++;
+
 			//cout << endl << " at clockCycles " << clockCycles << endl;
 			cout << endl;
 			printRegisters(clockCycles);
