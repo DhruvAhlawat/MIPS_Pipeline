@@ -488,6 +488,7 @@ struct MIPS_Architecture
 			} 
 			if(L2->IDisStalling == false)
 			{
+				++arch->commandCount[arch->PCcurr];
 				address = arch->PCcurr;
 				cout << "Fetched Command No. " << arch->PCcurr;
 				CurCommand = arch->commands[address]; //updates to this address
@@ -567,7 +568,7 @@ struct MIPS_Architecture
 			else if(curCommand[0] == "")
 				return;
 			instructionType = curCommand[0];
-			cout << " deco " << instructionType << " ";
+			
 			for (int i = 1; i < 4 && i < curCommand.size(); i++)
 			{
 				r[i-1] = curCommand[i];
@@ -582,6 +583,8 @@ struct MIPS_Architecture
 									//so the next values for the next stage will be the default blanks	
 			}else 
 			{	
+				cout << " deco " << instructionType << " ";
+				arch->DataHazards.insert({r[0],2});
 				L2->IDisStalling = false;
 				isStalling = false; 
 			}
@@ -634,6 +637,21 @@ struct MIPS_Architecture
 		}
 	};
 
+	void HazardUpdate()
+	{
+		auto i = DataHazards.begin();
+		while(i != DataHazards.end())
+		{
+			if(++(i->second) >= 6)
+			{
+				auto t = i;
+				i++; DataHazards.erase(t);
+			}
+			else{
+				i++;
+			}
+		}
+	}
 
 	struct EX
 	{	
@@ -833,7 +851,7 @@ struct MIPS_Architecture
 			
 			L2.Update(); L3.Update(); L4.Update(); L5.Update(); //updated the intermittent latches
 			clockCycles++; 
-			++commandCount[PCcurr];
+			HazardUpdate();
 
 			//cout << endl << " at clockCycles " << clockCycles << endl;
 			cout << endl;
