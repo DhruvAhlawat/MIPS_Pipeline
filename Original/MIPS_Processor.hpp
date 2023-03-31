@@ -460,7 +460,8 @@ struct MIPS_Architecture
 		void Update()
 		{
 			currentCommand = nextCommand; 
-			nextCommand = {}; curIsWorking = nextIsWorking;
+			// nextCommand = {}; 
+			curIsWorking = nextIsWorking;
 		}
 	};
 
@@ -482,6 +483,7 @@ struct MIPS_Architecture
 			cout << " |IF|=> ";
 			if(arch->PCcurr >= arch->commands.size())
 			{
+				L2->nextCommand = {};
 				isWorking = false;
 				L2->nextIsWorking = false;
 				return; //since we must be done with all the commands at this point
@@ -495,6 +497,10 @@ struct MIPS_Architecture
 				L2->nextCommand = CurCommand; //updates the value in the L2 at the same time, but for the next time
 				arch->PCcurr = arch->PCnext;
 				arch->PCnext++;
+			}
+			else
+			{
+				cout << "** ";
 			}
 		}
 	};
@@ -555,10 +561,10 @@ struct MIPS_Architecture
 			{
 				curCommand = L2->currentCommand; //we get the command from the L2 flipflop between IF and ID
 				isWorking = L2->curIsWorking; 
-
 			}
 			if(isWorking == false)
 			{
+				L3->nextInstructionType = "";
 				L3->nextIsWorking = false;
 			}
 			//on the basis of the commands we got, we can assign further
@@ -576,6 +582,7 @@ struct MIPS_Architecture
 			
 			if(arch->DataHazards.count(r[1]) && arch->DataHazards[r[1]] < 5 || arch->DataHazards.count(r[2]) && arch->DataHazards[r[2]] < 5)
 			{
+				cout << "**";
 				isStalling = true;	//then we should stall this stage right now.
 				L2->IDisStalling = true;
 				L3->nextInstructionType = ""; //sending null as instruction
@@ -840,9 +847,10 @@ struct MIPS_Architecture
 
 		while(WriteBack.isWorking)
 		{
-			WriteBack.run();
+			WriteBack.run(); //First half Cycle
+
+			Decode.run(); //Second Half Cycle, Decode running before IF so it can detect stalls and make IF stall
 			fetch.run();
-			Decode.run();
 			ALU.run();
 			DataMemory.run();
 			 
