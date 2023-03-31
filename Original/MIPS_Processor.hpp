@@ -524,7 +524,6 @@ struct MIPS_Architecture
 			curIsWorking = nextIsWorking;
 			nextInstructionType = ""; //this would ensure that if instruction
 			// type does not get updated, then we won't run any new commands
-			
 		}
 
 	};
@@ -568,24 +567,22 @@ struct MIPS_Architecture
 			else if(curCommand[0] == "")
 				return;
 			instructionType = curCommand[0];
-			cout << " decoded command as " << instructionType << " and ";
+			cout << " deco " << instructionType << " ";
 			for (int i = 1; i < 4 && i < curCommand.size(); i++)
 			{
 				r[i-1] = curCommand[i];
-				
 			}
 			
-			if(arch->DataHazards.count(r[1]) && arch->DataHazards[r[1]] < 5 || arch->DataHazards.count(r[2]) && arch->DataHazards[r[2]])
+			if(arch->DataHazards.count(r[1]) && arch->DataHazards[r[1]] < 5 || arch->DataHazards.count(r[2]) && arch->DataHazards[r[2]] < 5)
 			{
 				isStalling = true;	//then we should stall this stage right now.
 				L2->IDisStalling = true;
-				L3->IDisStalling = true;
+				L3->nextInstructionType = ""; //sending null as instruction
 				return;				//in the stall stage, we will not do any updated to the L3 latch, 
 									//so the next values for the next stage will be the default blanks	
 			}else 
 			{	
 				L2->IDisStalling = false;
-				L3->IDisStalling = false;
 				isStalling = false; 
 			}
 		
@@ -607,7 +604,7 @@ struct MIPS_Architecture
 				dataValues[0] = res.first;
 				dataValues[1] = arch->registers[arch->registerMap[res.second]];				
 			}
-			cout << " passed " << dataValues[0] << " and " << dataValues[1] << " onto L3 latch ";
+			cout << dataValues[0] << " and " << dataValues[1] << " ";
 			UpdateL3();
 		}
 		
@@ -633,7 +630,7 @@ struct MIPS_Architecture
 			// curAddr = nextAddr; curReg = nextReg;
 			curMemWrite = nextMemWrite; curDataIn = nextDataIn;
 			curReg = nextReg; curIsWorking = nextIsWorking;
-			nextMemWrite = -2;
+			nextMemWrite = -1;
 		}
 	};
 
@@ -656,10 +653,9 @@ struct MIPS_Architecture
 
 		void run()
 		{
-			dataValues = L3->curData; 
-			r1 = L3->curWriteReg; 
 			iType = L3->curInstructionType; 
 			isWorking = L3->curIsWorking;
+			cout << " |EX|=> ";
 			if(!isWorking)
 			{
 				L4->curIsWorking = false;
@@ -669,14 +665,13 @@ struct MIPS_Architecture
 				L4->nextReg = ""; L4->nextDataIn = -1;
 				return;
 			}
-			
+			dataValues = L3->curData; 
+			r1 = L3->curWriteReg; 
 			
 			result = calc(); 
 			L4->nextReg = r1; L4->nextDataIn = result; 
 			L4->nextMemWrite = (iType == "sw")? 1 : (iType == "lw") ? 0 : -1;
-			cout << " |EX|=> ";
-			if(iType != "")
-			cout << " did " << iType << " operation on " << dataValues[0] << " and " << dataValues[1] << " ";
+			cout << " did " << iType << " " << dataValues[0] << " " << dataValues[1] << " ";
 		}
 
 		int calc()
@@ -759,7 +754,7 @@ struct MIPS_Architecture
 			{
 				//then we write into the memory
 				arch->data[dataIn] = arch->registers[arch->registerMap[reg]]; 
-				cout << " wrote value of " << reg << ":" << arch->registers[arch->registerMap[reg]] << " into memory at " << dataIn;
+				cout << " sent val" << reg << ":" << arch->registers[arch->registerMap[reg]] << " into memory at " << dataIn;
 				L5->next_data = -1; L5->nextRegister = ""; //since we dont need to write anything onto the register, the reg is passed as ""
 			}
 			else
