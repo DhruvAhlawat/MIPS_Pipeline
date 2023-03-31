@@ -514,7 +514,7 @@ struct MIPS_Architecture
 		vector<int> curData, nextData;
 		string curWriteReg = "", nextWriteReg = "";
 		string curInstructionType = "", nextInstructionType = "";
-		
+		bool IDisStalling = false;
 		bool curIsWorking = true, nextIsWorking = true;
 		void Update()
 		{
@@ -555,6 +555,7 @@ struct MIPS_Architecture
 			{
 				curCommand = L2->currentCommand; //we get the command from the L2 flipflop between IF and ID
 				isWorking = L2->curIsWorking; 
+
 			}
 			if(isWorking == false)
 			{
@@ -574,15 +575,17 @@ struct MIPS_Architecture
 				
 			}
 			
-			if(arch->DataHazards.count(r[0]) && arch->DataHazards[r[0]] < 5 || arch->DataHazards.count(r[1]))
+			if(arch->DataHazards.count(r[1]) && arch->DataHazards[r[1]] < 5 || arch->DataHazards.count(r[2]) && arch->DataHazards[r[2]])
 			{
 				isStalling = true;	//then we should stall this stage right now.
 				L2->IDisStalling = true;
+				L3->IDisStalling = true;
 				return;				//in the stall stage, we will not do any updated to the L3 latch, 
 									//so the next values for the next stage will be the default blanks	
 			}else 
 			{	
 				L2->IDisStalling = false;
+				L3->IDisStalling = false;
 				isStalling = false; 
 			}
 		
@@ -621,6 +624,7 @@ struct MIPS_Architecture
 	struct EXDM
 	{
 		string curReg, nextReg;
+		
 		int curDataIn, nextDataIn;
 		int curMemWrite, nextMemWrite = 0;
 		bool curIsWorking = true, nextIsWorking = true;
@@ -652,13 +656,21 @@ struct MIPS_Architecture
 
 		void run()
 		{
+			dataValues = L3->curData; 
+			r1 = L3->curWriteReg; 
+			iType = L3->curInstructionType; 
 			isWorking = L3->curIsWorking;
 			if(!isWorking)
 			{
 				L4->curIsWorking = false;
 			}
-			dataValues = L3->curData; iType = L3->curInstructionType; 
-			r1 = L3->curWriteReg; 
+			if(iType == "")
+			{
+				L4->nextReg = ""; L4->nextDataIn = -1;
+				return;
+			}
+			
+			
 			result = calc(); 
 			L4->nextReg = r1; L4->nextDataIn = result; 
 			L4->nextMemWrite = (iType == "sw")? 1 : (iType == "lw") ? 0 : -1;
@@ -739,6 +751,7 @@ struct MIPS_Architecture
 
 			if(reg == "")
 			{
+				L5->nextRegister = "";
 				return; //nothing to do here
 			}
 
