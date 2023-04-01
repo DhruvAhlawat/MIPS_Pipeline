@@ -384,21 +384,16 @@ struct MIPS_Architecture
 		vector<string> nextCommand = {};
 		bool IDisStalling = false;
 		bool curIsWorking = true, nextIsWorking = true; 
-		int PC;
-		int PCrun;
 		IFID()
 		{
 			currentCommand = {};
 			nextCommand = currentCommand;
-			PCrun = PC;
 		}
 		void Update()
 		{
 			currentCommand = nextCommand; 
 			// nextCommand = {}; 
 			curIsWorking = nextIsWorking;
-			PC = PCrun;
-              
 		}
 	};
 
@@ -407,7 +402,7 @@ struct MIPS_Architecture
 		public:
 		MIPS_Architecture *arch;
 		bool isWorking = true;
-		IFID *L2; //L2 latch
+		IFID *L2; //L2 flipflop or register
 		int address;
 		vector<string> CurCommand; //the current command after reading the address
 		
@@ -430,7 +425,6 @@ struct MIPS_Architecture
 				++arch->commandCount[arch->PCcurr];
 				address = arch->PCcurr;
 				cout << "Fetched Command No. " << arch->PCcurr;
-				L2->PCrun = arch->PCcurr;
 				CurCommand = arch->commands[address]; //updates to this address
 				L2->nextCommand = CurCommand; //updates the value in the L2 at the same time, but for the next time
 				arch->PCcurr = arch->PCnext;
@@ -461,15 +455,12 @@ struct MIPS_Architecture
 		string curInstructionType = "", nextInstructionType = "";
 		bool IDisStalling = false;
 		bool curIsWorking = true, nextIsWorking = true;
-		int PC;
-		int PCrun;
 		void Update()
 		{
 			//on getting the updated values, we can run the code
 			curData = nextData;
 			curInstructionType = nextInstructionType; curWriteReg = nextWriteReg;
 			curIsWorking = nextIsWorking;
-			PC = PCrun;
 			nextInstructionType = ""; //this would ensure that if instruction
 			// type does not get updated, then we won't run any new commands
 		}
@@ -489,18 +480,15 @@ struct MIPS_Architecture
 		string instructionType = "";
 		string addr;
 		vector<string> curCommand;
-		int checkforPC;
 		ID(MIPS_Architecture *architecture, IFID *ifid, IDEX *idex)
 		{
 			arch = architecture;
 			L2 = ifid;
 			L3 = idex;
 		}
-        
+
 		void run()
 		{
-			 checkforPC = L2->PC; 
-			 L3->PCrun = checkforPC;
 			if(!isStalling) //if it is stalling, then we do not update the current command and isWorking status
 			{
 				curCommand = L2->currentCommand; //we get the command from the L2 flipflop between IF and ID
@@ -513,13 +501,12 @@ struct MIPS_Architecture
 			}
 			//on the basis of the commands we got, we can assign further
 			cout << " |ID|=> ";
-
 			if(curCommand.size() == 0)
 				return;
 			else if(curCommand[0] == "")
 				return;
 			instructionType = curCommand[0];
-			if(instructionType == "j") //then its a jump instruction, in which case we should jump to the address label, using the label
+			if(instructionType == "j") //then its a jump instruction, in which case we should jump to the address label, using
 			{
 				arch->j(curCommand[1],"", ""); //and then we must introduce a stall after this stage so as to 
 				//not let a wrong instruction go by.
@@ -559,19 +546,15 @@ struct MIPS_Architecture
 				dataValues[0] = arch->registers[arch->registerMap[r[1]]];
 				dataValues[1] = stoi(r[2]); //since this in string form and not a register
 			}
-			else if(curInstruction == 2)//for lw and sw to be written LATER
+			else //for lw and sw to be written LATER
 			{
-				pair<int,string> res = arch->decodeAddress(r[1]);    // we implemented a new function decodeAddress which correctly decodes as string and int 
+				pair<int,string> res = arch->decodeAddress(r[1]);
 				dataValues[0] = res.first;
 				dataValues[1] = arch->registers[arch->registerMap[res.second]];	
 				dataValues[2] = arch->registers[arch->registerMap[r[0]]];
 				cout << " passed " << dataValues[2] << " for sw ";		
 			}
-			else{
-                     
-
-			}
-			cout << dataValues[0] << " and " << dataValues[1] << " "<<"PCcurr"<< " "<<checkforPC;
+			cout << dataValues[0] << " and " << dataValues[1] << " ";
 			UpdateL3();
 		}
 		
@@ -603,14 +586,11 @@ struct MIPS_Architecture
 		int curDataIn, nextDataIn;
 		int curMemWrite, nextMemWrite = 0;
 		bool curIsWorking = true, nextIsWorking = true;
-		int PC;
-		int PCrun;
 		void Update()
 		{
 			// curAddr = nextAddr; curReg = nextReg;
 			curMemWrite = nextMemWrite; curDataIn = nextDataIn;
 			curReg = nextReg; curIsWorking = nextIsWorking;
-			PC = PCrun;
 			nextMemWrite = -1; curSWdata = nextSWdata;
 		}
 	};
@@ -635,13 +615,12 @@ struct MIPS_Architecture
 	{	
 		public:
 		bool isWorking = true; int swData;
-		MIPS_Architecture *arch; IDEX *L3; EXDM *L4;//The L3 and L4 Latchs
+		MIPS_Architecture *arch; IDEX *L3; EXDM *L4;//The L3 Latch
 		string iType = "";
 		vector<int> dataValues; 
 		int result = 0;
 		string r1; //register to be written into, this will not be used in this step but passed forward till the WriteBack stage where it will be written into
 		//now we decode the instruction from the instructions map
-		int checkforPC;
 		EX(MIPS_Architecture *architecture, IDEX *l3, EXDM *l4)
 		{
 			arch = architecture; L3 = l3; L4 = l4; //the latch reference and architecture reference is stored at initialization
@@ -653,8 +632,6 @@ struct MIPS_Architecture
 			iType = L3->curInstructionType; 
 			isWorking = L3->curIsWorking;
 			cout << " |EX|=> ";
-            checkforPC = L3->PC;
-			L4->PCrun = checkforPC;
 			if(!isWorking)
 			{
 				L4->curIsWorking = false;
@@ -674,11 +651,7 @@ struct MIPS_Architecture
 			}
 			L4->nextReg = r1; L4->nextDataIn = result; 
 			L4->nextMemWrite = (iType == "sw")? 1 : (iType == "lw") ? 0 : -1;
-			if(iType!="sw" || iType !="lw"){
-			cout << " did " << iType << " " << dataValues[0] << " " << dataValues[1] << " "<<"currPC"<<" "<<checkforPC;}
-			else{
-				cout<<"address"<<dataValues[0] << "+" << dataValues[1] << "calculated"; 
-			}
+			cout << " did " << iType << " " << dataValues[0] << " " << dataValues[1] << " ";
 		}
 
 		int calc()
@@ -713,13 +686,10 @@ struct MIPS_Architecture
 			int curr_data;
             int next_data;
 			bool curIsWorking = true, nextIsWorking = true;
-			int PC;
-			int PCrun;
 			void Update(){
 				 currRegister = nextRegister;    //on getting the updated value we can run the code
 				 nextRegister = "";
 				 curr_data = next_data;
-				 PC = PCrun ;
 				 next_data = 0; curIsWorking = nextIsWorking;
 			}
 	};
@@ -733,7 +703,6 @@ struct MIPS_Architecture
 		bool isWorking = true;
 		MIPS_Architecture *arch; EXDM *L4; DMWB *L5; //the references to architecture and the L4 Latch 
 		string reg; 
-		int checkforPc;
 		int memWrite;  //when memWrite is 1, then we write from register into the memory
 						//when memWrite is 0. then we read from memory into register, so it is passed onto the WB stage to do that
 						//when it is -1, then we skip this stage and move onto the Writeback stage
@@ -747,8 +716,6 @@ struct MIPS_Architecture
 		void run()
 		{
 			isWorking = L4->curIsWorking;
-            checkforPc = L4->PC;
-			L5->PCrun = checkforPc;
 			if(!isWorking)
 			{
 				L5->nextIsWorking = false;
@@ -769,16 +736,14 @@ struct MIPS_Architecture
 				//then we write into the memory
 
 				arch->data[dataIn] = swData; //storing into the register what we decoded from a register file back in the ID stage
-				cout << " sent val " << swData << " into memory at " << dataIn<< "currPC"<<" "<<checkforPc;
+				cout << " sent val " << swData << " into memory at " << dataIn;
 				L5->next_data = -1; L5->nextRegister = ""; //since we dont need to write anything onto the register, the reg is passed as ""
 			}
 			else
 			{
 				//we must read from the memory into the register, so
-				if(memWrite == 0){
+				if(memWrite == 0)
 					dataIn = arch->data[dataIn]; 
-					cout<< "reading value" << dataIn << "from Memory to  register" << reg<<"currPC"<<" "<<checkforPc; 
-				}
 				//if memWrite is instead -1, then we simply pass on the value of dataIn directly.
 				L5->nextRegister = reg;
 				L5->next_data = dataIn; 
@@ -791,11 +756,11 @@ struct MIPS_Architecture
     struct WB{
 		public:
 		bool isWorking = true;
+
 		string r2;
 		int new_data;
 		MIPS_Architecture *newarch;
 		DMWB* L5;
-		int checkforPC; 
 		WB(MIPS_Architecture *a,DMWB *dmwb){
 			newarch = a;
 			L5 = dmwb;
@@ -804,13 +769,11 @@ struct MIPS_Architecture
 			isWorking = L5->curIsWorking;
             r2 = L5->currRegister;
 			new_data  = L5->curr_data;
-            
 			cout << " |WB|=> ";
-
 			if(r2 != "")
 			{
 				newarch->registers[newarch->registerMap[r2]] = new_data;
-				cout << "wrote " << new_data << " into reg " << r2 << " "<<"currPC"<<L5->PCrun;
+				cout << "wrote " << new_data << " into reg " << r2 << " ";
 			}
 			
 		}
@@ -842,10 +805,15 @@ struct MIPS_Architecture
 		while(WriteBack.isWorking)
 		{
 			WriteBack.run(); //First half Cycle
+
 			Decode.run(); //Second Half Cycle, Decode running before IF so it can detect stalls and make IF stall
 			fetch.run();
 			ALU.run();
-			DataMemory.run();		
+			DataMemory.run();
+			 
+		
+			
+			
 			L2.Update(); L3.Update(); L4.Update(); L5.Update(); //updated the intermittent latches
 			clockCycles++; 
 			HazardUpdate(); //updating the hazards
