@@ -1,10 +1,6 @@
-addi $s0, $0, 1
-loop:
-	beq $s0, $0, exit
-	addi $s0, $s0, -1
-	j loop
-exit:
-	addi $t0, $0, 1
+addi $s0, $0, 6
+addi $s1, $0, 3
+mul $s2, $s0, $s1
 
 
 
