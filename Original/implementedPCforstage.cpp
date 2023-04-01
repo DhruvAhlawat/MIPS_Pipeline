@@ -576,8 +576,8 @@ struct MIPS_Architecture
 			{
 				if(arch->registers[arch->registerMap[r[0]]]  == arch->registers[arch->registerMap[r[1]]])
 				{
-					cout << "branched to instruction number " << arch->address[curCommand[1]];
-					arch->j(curCommand[1],"", ""); 
+					cout << "branched to instruction number " << arch->address[r[2]];
+					arch->j(r[2],"", ""); 
 					cout << "PC= " << checkforPC;
 					curCommand[0] = "afterJump";
 					stall();
