@@ -366,77 +366,11 @@ struct MIPS_Architecture
 		commands.push_back(command);
 	}
 
-	void getLabels(std::string line)
-	{
-		// strip until before the comment begins
-		line = line.substr(0, line.find('#'));
-		std::vector<std::string> command;
-		boost::tokenizer<boost::char_separator<char>> tokens(line, boost::char_separator<char>(", \t"));
-		for (auto &s : tokens)
-			command.push_back(s);
-		// empty line or a comment only line
-		if (command.empty())
-			return;
-		else if (command.size() == 1)
-		{
-			std::string label = command[0].back() == ':' ? command[0].substr(0, command[0].size() - 1) : "?";
-			if (address.find(label) == address.end())
-				address[label] = commands.size();
-			else
-				address[label] = -1;
-			command.clear();
-		}
-		else if (command[0].back() == ':')
-		{
-			std::string label = command[0].substr(0, command[0].size() - 1);
-			if (address.find(label) == address.end())
-				address[label] = commands.size();
-			else
-				address[label] = -1;
-			command = std::vector<std::string>(command.begin() + 1, command.end());
-		}
-		else if (command[0].find(':') != std::string::npos)
-		{
-			int idx = command[0].find(':');
-			std::string label = command[0].substr(0, idx);
-			if (address.find(label) == address.end())
-				address[label] = commands.size();
-			else
-				address[label] = -1;
-			command[0] = command[0].substr(idx + 1);
-		}
-		else if (command[1][0] == ':')
-		{
-			if (address.find(command[0]) == address.end())
-				address[command[0]] = commands.size();
-			else
-				address[command[0]] = -1;
-			command[1] = command[1].substr(1);
-			if (command[1] == "")
-				command.erase(command.begin(), command.begin() + 2);
-			else
-				command.erase(command.begin(), command.begin() + 1);
-		}
-		if (command.empty())
-			return;
-		if (command.size() > 4)
-			for (int i = 4; i < (int)command.size(); ++i)
-				command[3] += " " + command[i];
-	}
-
-
 
 	// construct the commands vector from the input file
 	void constructCommands(std::ifstream &file)
 	{
 		std::string line;
-		// while(getline(file,line))
-		// 	getLabels(line);
-
-		file.clear();
-		file.seekg(0, file.beg);
-
-		
 		while (getline(file, line))
 			parseCommand(line);
 		file.close();
@@ -615,8 +549,6 @@ struct MIPS_Architecture
 				stall();
 				return;
 			}
-			
-
 
 			//Checking Dependencies first
 			if((arch->DataHazards.count(r[1]) && arch->DataHazards[r[1]] < 5) ||
@@ -655,6 +587,7 @@ struct MIPS_Architecture
 				{
 					cout << "did not branch- bubbled ";
 					L3->nextInstructionType = "";
+					stall();
 				}
 				return;
 			}
