@@ -445,7 +445,7 @@ struct MIPS_Architecture
 
 	int instructionNumber(string s)
 	{
-		if(s == "add" || s == "and" || s == "sub" || s == "mult" || s == "or" || s == "slt")
+		if(s == "add" || s == "and" || s == "sub" || s == "mul" || s == "or" || s == "slt")
 			return 0;
 		else if(s == "addi" || s == "andi" || s == "ori" || s == "srl" || s == "sll")
 			return 1;
@@ -572,9 +572,10 @@ struct MIPS_Architecture
 				isStalling = false; 
 			}
 
-			if(instructionType == "beq") //doing the entire BEQ and BNE process in ID step itself, while introducing a bubble in the pipeline where nothing gets done
+			if(instructionType == "beq" || instructionType == "bne") //doing the entire BEQ and BNE process in ID step itself, while introducing a bubble in the pipeline where nothing gets done
 			{
-				if(arch->registers[arch->registerMap[r[0]]]  == arch->registers[arch->registerMap[r[1]]])
+				bool isEqual = (arch->registers[arch->registerMap[r[0]]]  == arch->registers[arch->registerMap[r[1]]]);
+				if((isEqual^(instructionType == "bne")))
 				{
 					cout << "branched to instruction number " << arch->address[r[2]];
 					arch->j(r[2],"", ""); 
@@ -587,6 +588,7 @@ struct MIPS_Architecture
 				{
 					cout << "did not branch- bubbled ";
 					L3->nextInstructionType = "";
+					curCommand[0] = "afterJump";
 					stall();
 				}
 				return;
@@ -725,7 +727,7 @@ struct MIPS_Architecture
 				return dataValues[0] + dataValues[1];
 			else if(iType == "sub")
 				return dataValues[0] - dataValues[1];
-			else if(iType == "mult")
+			else if(iType == "mul")
 				return dataValues[0] * dataValues[1];
 			else if(iType == "and" || iType == "andi")
 				return (dataValues[0] & dataValues[1]);

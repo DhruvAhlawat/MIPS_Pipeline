@@ -1,0 +1,1 @@
+DM stage takes a full cycle, hence stalling is done till the DM stage is complete incase of DataHazards
