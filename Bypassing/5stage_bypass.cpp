@@ -23,6 +23,10 @@ using namespace std;
 struct MIPS_Architecture
 {
 	public:
+	struct IFID;
+	struct IDEX;
+	struct EXDM;
+	struct DMWB;
 	int registers[32] = {0}, PCcurr = 0, PCnext = 0;
 	//std::unordered_map<std::string, std::function<int(MIPS_Architecture &, std::string, std::string, std::string)>> instructions;
 	std::unordered_map<std::string, int> registerMap, address;
@@ -376,8 +380,9 @@ struct MIPS_Architecture
 		file.close();
 	}
 
-	map<string,int> DataHazards;
-
+	map<string,pair<int,int>> DataHazards; //the first int denotes the stage the value is in currently, while the second one denotes the type of instruction
+	//that is causing the hazard. Since for lw the data appears first after DM into L5 while in normal add,sub etc the data is generated right in L4 itself
+	
 
 	struct IFID //basically the L2 latch, used to transfer values between IF and ID stage
 	{
@@ -482,8 +487,8 @@ struct MIPS_Architecture
 		bool isWorking = true;
 		bool isStalling = false;
 		MIPS_Architecture *arch;
-		IFID* L2;
-		IDEX *L3;
+		IFID* L2; EXDM *L4; 
+		IDEX *L3; DMWB *L5;
 		string r[3] = {""}; //r[0] is the written to register, r[1] and r[2] are the using registers, they can be null
 		vector<int>dataValues = vector<int>(3,0); //to be passed onto the EX stage for computation. only 2 will be sent most of the time, but for sw instruction, the value of the register would be sent as the index=2 element
 		string instructionType = "";
@@ -551,14 +556,18 @@ struct MIPS_Architecture
 			}
 
 			//Checking Dependencies first
-			if((arch->DataHazards.count(r[1]) && arch->DataHazards[r[1]] < 5) ||
-			 (arch->DataHazards.count(r[2]) && arch->DataHazards[r[2]] < 5) || 
-			 ((instructionType == "beq" || instructionType == "bne") && arch->DataHazards.count(r[0]) && arch->DataHazards[r[0]] < 5))
+
+			//Forwarding logic 
+			//if((arch->DataHazards.count(r[1]) && arch->DataHazards[r[1]].first < arch->DataHazards[r[1]].second + ))
+				
+			if((arch->DataHazards.count(r[1]) && arch->DataHazards[r[1]].first < 5) ||
+			 (arch->DataHazards.count(r[2]) && arch->DataHazards[r[2]] .first< 5) || 
+			 ((instructionType == "beq" || instructionType == "bne") && arch->DataHazards.count(r[0]) && arch->DataHazards[r[0]].first < 5))
 			{
 				stall(); 
 				return;
 			}
-			else if(instructionType == "sw" && (arch->DataHazards.count(r[0]) && arch->DataHazards[r[0]] < 5))
+			else if(instructionType == "sw" && (arch->DataHazards.count(r[0]) && arch->DataHazards[r[0]].first < 5))
 			{
 				//this is again a stall case, a rare one where the r[0] register's value needs to be used for sw 
 				stall();
@@ -567,7 +576,10 @@ struct MIPS_Architecture
 			else 
 			{	
 				cout << " decoded " << instructionType << " ";
-				arch->DataHazards.insert({r[0],2});
+				pair<int,int> latchAndType = {2,0};
+				if(instructionType == "lw") latchAndType.second++;  //if it is lw, then its value gets prepared in L5 directly, hence we must know this while forwarding
+				
+				arch->DataHazards.insert({r[0],latchAndType});
 				L2->IDisStalling = false;
 				isStalling = false; 
 			}
@@ -659,7 +671,7 @@ struct MIPS_Architecture
 		auto i = DataHazards.begin();
 		while(i != DataHazards.end())
 		{
-			if(++(i->second) >= 6)
+			if(++(i->second.first) >= 6)
 			{
 				auto t = i;
 				i++; DataHazards.erase(t);
