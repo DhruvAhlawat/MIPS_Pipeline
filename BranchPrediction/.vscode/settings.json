@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "MLTable": "yaml",
+        "xstring": "cpp",
+        "fstream": "cpp",
+        "xiosbase": "cpp",
+        "iostream": "cpp"
+    }
+}
