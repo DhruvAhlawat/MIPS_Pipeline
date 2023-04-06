@@ -18,7 +18,7 @@ int getLeast14(string hex)
             num += (hex[i] - '0')*mult;
         mult *= 16;
     }
-    num = (num && 16383); //done to get only the first 14 bits. 16383 is 2^14 - 1
+    num = (num & 16383); //done to get only the first 14 bits. 16383 is 2^14 - 1
     return num;
 }
 
@@ -54,17 +54,17 @@ struct cntState //simple state for counters
 int main()
 {
 
-    int initialValueOfCounter = 0;
+    int initialValueOfCounter = 3;
     vector<cntState> counters(16384, cntState(initialValueOfCounter)); //makes an array of 2^14 counters with the given starting state
 
 
 
     ifstream branchtrace; branchtrace.open("branchtrace.txt");
-    ofstream outfile("cnt00.txt");
+    ofstream outfile("cnt11.txt");
     int correctPredictions = 0;
     int total = 0;
 
-    outfile << "VARIANT where initially all counters are in state 00-" << endl;
+    outfile << "VARIANT where initially all counters are in state 11" << endl;
     outfile << endl;
 
     if(!branchtrace.is_open())
@@ -80,17 +80,17 @@ int main()
             total++;
             int index = getLeast14(a);
             
-            int prediction = counters[index].getState();
+            int prediction = counters[index].getState(); //getState returns the prediction of the counter object
             outfile << "Prediction for " << a << " is =>" << prediction << " at state " << counters[index].cnt << " which is ";
             branchtrace >> b;
             if((b[0] - '0') == prediction)
             {
                 correctPredictions++;
-                outfile << "CORRECT" << endl;
+                outfile << "CORRECT" << endl; //prints correct if the prediction matches
             }
             else
             {
-                outfile << "WRONG" << endl;
+                outfile << "WRONG" << endl; //else it prints wrong if the prediction was incorrect
             }
             counters[index].Update(b[0] - '0');
         }
@@ -98,8 +98,21 @@ int main()
 
     outfile << endl;
     outfile << "correct = " << correctPredictions << " out of " << total << endl;
-    outfile << " Total Accuracy => " << (double)(correctPredictions)/total << endl;
+    outfile << " Total Accuracy => " << (double)(correctPredictions)/total << endl; //prints the accuracy as a decimal between 0 to 1
     outfile << endl;
 
     outfile.close();
+    branchtrace.close(); 
+    //ending of branch prediction via array of counters
+
+
+    //using branch history register that stores the outcome of the previous 2 branches
+    //and predicts based on those values. uses the same 2bit counter cntState.
+    branchtrace.open("branchtrace.txt");
+    outfile.open("BHR.txt");
+
+    
+
+
+
 }
