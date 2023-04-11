@@ -160,6 +160,12 @@ struct ID
 			isStalling = false; 
 			return;
 		}
+		else if(curCommand[0] == "afterBranch")
+		{
+			stall();
+			curCommand[0] = "afterJump"; //so that the next time we can stop the stalling
+			return;
+		}
 		else if(curCommand[0] == "")
 			return;
 		instructionType = curCommand[0];
@@ -205,7 +211,7 @@ struct ID
 			if(instructionType != "sw" && instructionType != "beq" && instructionType != "bne" && instructionType != "j")
 			{
 				DataHazards.insert({r[0],2});
-				DataHazards.insert({r[1],2});
+				//DataHazards.insert({r[1],2});
 			}
 			L2->IDisStalling = false;
 			isStalling = false; 
@@ -221,7 +227,7 @@ struct ID
 				arch->j(r[2],"", ""); 
 				if(arch->outputFormat == 0)
 					cout << "PC= " << checkforPC;
-				curCommand[0] = "afterJump";
+				curCommand[0] = "afterBranch";
 				stall();
 				return;
 			}
@@ -230,7 +236,7 @@ struct ID
 				if(arch->outputFormat == 0)
 					cout << "did not branch- bubbled ";
 				L3->nextInstructionType = "";
-				curCommand[0] = "afterJump";
+				curCommand[0] = "afterBranch";
 				stall();
 			}
 			return;
@@ -499,7 +505,7 @@ struct WB{
 	}
 };
 
-	void HazardUpdate(int maxVal)
+void HazardUpdate(int maxVal)
 	{
 		auto i = DataHazards.begin();
 		while(i != DataHazards.end())
