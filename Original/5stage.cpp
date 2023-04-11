@@ -1,9 +1,3 @@
-/**
- * @file MIPS_Processor.hpp
- * @author Mallika Prabhakar and Sayam Sethi
- * 
- */
-
 #ifndef __MIPS_PROCESSOR_HPP__
 #define __MIPS_PROCESSOR_HPP__
 
@@ -23,6 +17,9 @@ using namespace std;
 struct MIPS_Architecture
 {
 	public:
+	int outputFormat = 1; //output format = 0 is the output format we used for debugging, it shows what each stage is doing at every cycle, and which PC is being executed
+	//in each stage. output format = 1 is the output format we used for the final submission, it shows the value of each register at every cycle.
+
 	int registers[32] = {0}, PCcurr = 0, PCnext = 0;
 	//std::unordered_map<std::string, std::function<int(MIPS_Architecture &, std::string, std::string, std::string)>> instructions;
 	std::unordered_map<std::string, int> registerMap, address;
@@ -44,7 +41,6 @@ struct MIPS_Architecture
 	MIPS_Architecture(std::ifstream &file)
 	{
 		//instructions = {{"add", &MIPS_Architecture::add}, {"sub", &MIPS_Architecture::sub}, {"mul", &MIPS_Architecture::mul}, {"beq", &MIPS_Architecture::beq}, {"bne", &MIPS_Architecture::bne}, {"slt", &MIPS_Architecture::slt}, {"j", &MIPS_Architecture::j}, {"lw", &MIPS_Architecture::lw}, {"sw", &MIPS_Architecture::sw}, {"addi", &MIPS_Architecture::addi}};
-
 		for (int i = 0; i < 32; ++i)
 			registerMap["$" + std::to_string(i)] = i;
 		registerMap["$zero"] = 0;
@@ -289,20 +285,25 @@ struct MIPS_Architecture
 				std::cerr << s << ' ';
 			std::cerr << '\n';
 		}
-		std::cout << "\nFollowing are the non-zero data values:\n";
-		for (int i = 0; i < MAX / 4; ++i)
-			if (data[i] != 0)
-				std::cout << 4 * i << '-' << 4 * i + 3 << std::hex << ": " << data[i] << '\n'
-						  << std::dec;
-		std::cout << "\nTotal number of cycles: " << cycleCount << '\n';
-		std::cout << "Count of instructions executed:\n";
-		for (int i = 0; i < (int)commands.size(); ++i)
+		if(outputFormat == 0)
 		{
-			std::cout << commandCount[i] << " times:\t";
-			for (auto &s : commands[i])
-				std::cout << s << ' ';
-			std::cout << '\n';
+			std::cout << "\nFollowing are the non-zero data values:\n";
+			for (int i = 0; i < MAX / 4; ++i)
+				if (data[i] != 0)
+					std::cout << 4 * i << '-' << 4 * i + 3 << ": " << data[i] << '\n'
+							<< std::dec;
+					
+			std::cout << "\nTotal number of cycles: " << cycleCount << '\n';
+			std::cout << "Count of instructions executed:\n";
+			for (int i = 0; i < (int)commands.size(); ++i)
+			{
+				std::cout << commandCount[i] << " times:\t";
+				for (auto &s : commands[i])
+					std::cout << s << ' ';
+				std::cout << '\n';
+			}
 		}
+		
 	}
 
 	// parse the command assuming correctly formatted MIPS instruction (or label)
@@ -415,6 +416,7 @@ struct MIPS_Architecture
 		}
 		void run()
 		{
+			if(arch->outputFormat == 0)
 			cout << " |IF|=> ";
 			if(arch->PCnext >= arch->commands.size())
 			{
@@ -429,14 +431,16 @@ struct MIPS_Architecture
 				arch->PCnext++;
 				++arch->commandCount[arch->PCcurr];
 				address = arch->PCcurr;
-				cout << "Fetched Command No. " << arch->PCcurr;
+				if(arch->outputFormat == 0)
+					cout << "Fetched Command No. " << arch->PCcurr;
 				L2->PCrun = arch->PCcurr;
 				CurCommand = arch->commands[address]; //updates to this address
 				L2->nextCommand = CurCommand; //updates the value in the L2 at the same time, but for the next time
 			}
 			else
 			{
-				cout << "** ";
+				if(arch->outputFormat == 0)
+					cout << "** ";
 			}
 		}
 	};
@@ -497,7 +501,8 @@ struct MIPS_Architecture
 		}
         void stall()
 		{
-			cout << "**";
+			if(arch->outputFormat == 0)
+				cout << "**";
 			isStalling = true;	//then we should stall this stage right now.
 			L2->IDisStalling = true;
 			L3->nextInstructionType = ""; //sending null as instruction
@@ -519,7 +524,8 @@ struct MIPS_Architecture
 				L3->nextIsWorking = false;
 			}
 			//on the basis of the commands we got, we can assign further
-			cout << " |ID|=> ";
+			if(arch->outputFormat == 0)
+				cout << " |ID|=> ";
 			
 			if(curCommand.size() == 0)
 				return;
@@ -538,11 +544,13 @@ struct MIPS_Architecture
 			}
 			if(instructionType == "j") //then its a jump instruction, in which case we should jump to the address label, using the label
 			{
-				cout << "jumped to instruction number " << arch->address[curCommand[1]];
+				if(arch->outputFormat == 0)
+					cout << "jumped to instruction number " << arch->address[curCommand[1]];
 				arch->j(curCommand[1],"", ""); //and then we must introduce a stall after this stage so as to 
 				//not let a wrong instruction go by.
 				//the above code ensures that arch->PCnext has been updated correctly.
-				cout << "PC= " << checkforPC;
+				if(arch->outputFormat == 0)
+					cout << "PC= " << checkforPC;
 				curCommand[0] = "afterJump";
 				stall();
 				return;
@@ -567,8 +575,9 @@ struct MIPS_Architecture
 			}
 			else 
 			{	
-				cout << " decoded " << instructionType << " ";
-				if(instructionType != "sw")
+				if(arch->outputFormat == 0)
+					cout << " decoded " << instructionType << " ";
+				if(instructionType != "sw" && instructionType != "beq" && instructionType != "bne" && instructionType != "j")
 				{
 					arch->DataHazards.insert({r[0],2});
 				}
@@ -581,16 +590,19 @@ struct MIPS_Architecture
 				bool isEqual = (arch->registers[arch->registerMap[r[0]]]  == arch->registers[arch->registerMap[r[1]]]);
 				if((isEqual^(instructionType == "bne")))
 				{
-					cout << "branched to instruction number " << arch->address[r[2]];
+					if(arch->outputFormat == 0)
+						cout << "branched to instruction number " << arch->address[r[2]];
 					arch->j(r[2],"", ""); 
-					cout << "PC= " << checkforPC;
+					if(arch->outputFormat == 0)
+						cout << "PC= " << checkforPC;
 					curCommand[0] = "afterJump";
 					stall();
 					return;
 				}
 				else
 				{
-					cout << "did not branch- bubbled ";
+					if(arch->outputFormat == 0)
+						cout << "did not branch- bubbled ";
 					L3->nextInstructionType = "";
 					curCommand[0] = "afterJump";
 					stall();
@@ -616,19 +628,23 @@ struct MIPS_Architecture
 				dataValues[1] = arch->registers[arch->registerMap[res.second]];	
 				dataValues[2] = arch->registers[arch->registerMap[r[0]]];
 				if(instructionType == "sw"){
-				cout << " passed " << dataValues[2] << " for sw ";	
+					if(arch->outputFormat == 0)
+						cout << " passed " << dataValues[2] << " for sw ";	
 				}
 				if(instructionType == "lw"){
 					L3->secondregister = res.second;
-					cout << "Passed" << " "<<L3->secondregister <<"for lw";
+					if(arch->outputFormat == 0)
+						cout << "Passed" << " "<<L3->secondregister <<"for lw";
 				}	
 			}
 			else
 			{
-				cout << "Jumped to " << curCommand[1];
+				if(arch->outputFormat == 0)
+					cout << "Jumped to " << curCommand[1];
 			}
 			if(!isStalling)
-				cout << dataValues[0] << " and " << dataValues[1] << " "<<"PC="<< checkforPC;
+				if(arch->outputFormat == 0)
+					cout << dataValues[0] << " and " << dataValues[1] << " "<<"PC="<< checkforPC;
 			UpdateL3();
 		}
 
@@ -699,7 +715,8 @@ struct MIPS_Architecture
 		{	
 			iType = L3->curInstructionType; 
 			isWorking = L3->curIsWorking;
-			cout << " |EX|=> ";
+			if(arch->outputFormat == 0)
+				cout << " |EX|=> ";
             checkforPC = L3->PC;
 			L4->PCrun = checkforPC;
 			if(!isWorking)
@@ -725,9 +742,11 @@ struct MIPS_Architecture
 			L4->nextReg = r1; L4->nextDataIn = result; 
 			L4->nextMemWrite = (iType == "sw")? 1 : (iType == "lw") ? 0 : -1;
 			if(iType!="sw" && iType !="lw"){
-			cout << " did " << iType << " " << dataValues[0] << " " << dataValues[1] << " "<<"PC "<<checkforPC;}
+				if(arch->outputFormat == 0)
+					cout << " did " << iType << " " << dataValues[0] << " " << dataValues[1] << " "<<"PC "<<checkforPC;}
 			else{
-				cout<<"address"<<dataValues[0] << "+" << dataValues[1] << "calculated"; 
+				if(arch->outputFormat == 0)
+					cout<<"address"<<dataValues[0] << " + " << dataValues[1] << "calculated"; 
 			}
 		}
 
@@ -801,7 +820,8 @@ struct MIPS_Architecture
 			}
 			reg = L4->curReg; memWrite = L4->curMemWrite; dataIn = L4->curDataIn;
 			swData = L4->curSWdata;
-			cout << " |DM|=> "; 
+			if(arch->outputFormat == 0)
+				cout << " |DM|=> "; 
 			//updated all the values using the latch L4
 
 			if(reg == "")
@@ -813,9 +833,14 @@ struct MIPS_Architecture
 			if(memWrite == 1)
 			{
 				//then we write into the memory
-
-				arch->data[dataIn] = swData; //storing into the register what we decoded from a register file back in the ID stage
-				cout << " sent val " << swData << " into memory at " << dataIn<< "PC="<<checkforPc;
+				if(dataIn%4 != 0) 
+				{
+					cerr << endl << "<!---Error: Address not word aligned at PC= " << checkforPc << "---!>" << endl;
+					return;
+				}
+				arch->data[dataIn/4] = swData; //storing into the register what we decoded from a register file back in the ID stage
+				if(arch->outputFormat == 0)	
+					cout << " sent val " << swData << " into memory at " << dataIn<< "PC="<<checkforPc;
 				L5->next_data = -1; L5->nextRegister = ""; //since we dont need to write anything onto the register, the reg is passed as ""
 			}
 			else
@@ -823,8 +848,14 @@ struct MIPS_Architecture
 				//we must read from the memory into the register, so
 				if(memWrite == 0)
 				{
-					dataIn = arch->data[dataIn]; 
-					cout<< "sending value" << " " <<dataIn <<" "<<"from Memory to  register" <<" "<<reg<<" "<<"PC="<<checkforPc; 
+					if(dataIn%4 != 0) 
+					{
+						cerr << endl << "<!---Error: Address not word aligned at PC= " << checkforPc << "---!>" << endl;
+						return;
+					}
+					dataIn = arch->data[dataIn/4]; 
+					if(arch->outputFormat == 0)
+						cout<< "sending value" << " " <<dataIn <<" "<<"from Memory to  register" <<" "<<reg<<" "<<"PC="<<checkforPc; 
 				}
 				//if memWrite is instead -1, then we simply pass on the value of dataIn directly.
 				L5->nextRegister = reg;
@@ -841,10 +872,10 @@ struct MIPS_Architecture
 		string r2;
 		int checkForPC;
 		int new_data;
-		MIPS_Architecture *newarch;
+		MIPS_Architecture *arch;
 		DMWB* L5;
 		WB(MIPS_Architecture *a,DMWB *dmwb){
-			newarch = a;
+			arch = a;
 			L5 = dmwb;
 		}
         void run(){
@@ -852,11 +883,13 @@ struct MIPS_Architecture
             r2 = L5->currRegister;
 			new_data  = L5->curr_data;
 			checkForPC = L5->PC;
-			cout << " |WB|=> ";
+			if(arch->outputFormat == 0)
+				cout << " |WB|=> ";
 			if(r2 != "")
 			{
-				newarch->registers[newarch->registerMap[r2]] = new_data;
-				cout << "wrote " << new_data << " into reg " << r2 << " "<<"currPC"<<L5->PC;
+				arch->registers[arch->registerMap[r2]] = new_data;
+				if(arch->outputFormat == 0)
+					cout << "wrote " << new_data << " into reg " << r2 << " "<<"currPC"<<L5->PC;
 			}	
 		}
     };
@@ -869,7 +902,8 @@ struct MIPS_Architecture
 			return;
 		} //memory error
 
-		registers[registerMap["$sp"]] = (4 * commands.size()); //initializes position of sp. assumes that all the commands are also stored in data and so sp needs to be here
+		//registers[registerMap["$sp"]] = (4 * commands.size()); //initializes position of sp. assumes that all the commands are also stored in data and so sp needs to be here
+		//the above is optional, but since none of the testcases utilize it, it has been commented out
 		int clockCycles = 0;
 		//first we instantiate the stages
 		IFID L2; //The Latches
@@ -891,12 +925,29 @@ struct MIPS_Architecture
 			DataMemory.run();
 			
 			L2.Update(); L3.Update(); L4.Update(); L5.Update(); //updated the intermittent latches
-			clockCycles++; 
+			clockCycles++;
+			printRegisters(clockCycles);
+			if(DataMemory.memWrite == 1)
+			{
+				cout << 1 << " " << DataMemory.dataIn/4 << " " << DataMemory.swData;
+			}
+			else
+			{
+				cout << 0;
+			}
+			if(outputFormat == 0) 
+			{	
+				cout << " dataHazards are : ";
+				for(auto i: DataHazards)
+				{	
+					cout << i.first << " " << i.second << ", ";
+				}
+			}
+			
 			HazardUpdate(); //updating the hazards
 
 			//cout << endl << " at clockCycles " << clockCycles << endl;
 			cout << endl;
-			printRegisters(clockCycles);
 		}
 		handleExit(SUCCESS, clockCycles);
 
@@ -905,8 +956,9 @@ struct MIPS_Architecture
 	// print the register data in hexadecimal
 	void printRegisters(int clockCycle)
 	{
-		std::cout << "Cycle number: " << clockCycle << '\n'
-				  << std::hex;
+		if(outputFormat == 0) 
+			std::cout << "Cycle number: " << clockCycle << '\n';
+				  
 		for (int i = 0; i < 32; ++i)
 			std::cout << registers[i] << ' ';
 		std::cout << std::dec << '\n';
