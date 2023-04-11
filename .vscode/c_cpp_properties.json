@@ -4,7 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C:\\Users\\ASTHA MEENA\\Downloads\\boost_1_62_0\\boost_1_62_0"
+                "C:/Users/tripl/Documents/boost_1_62_0/boost_1_62_0"
             ],
             "defines": [
                 "_DEBUG",
@@ -14,7 +14,8 @@
             "compilerPath": "C:\\MinGW\\bin\\gcc.exe",
             "cStandard": "c11",
             "cppStandard": "gnu++14",
-            "intelliSenseMode": "windows-gcc-x86"
+            "intelliSenseMode": "windows-gcc-x86",
+            "configurationProvider": "ms-vscode.makefile-tools"
         }
     ],
     "version": 4
