@@ -1,4 +1,4 @@
-VARIANT where initially all counters are in state 01
+array counter VARIANT where initially all counters are in state 1
 
 Prediction for b77a8a3a is =>0 at state 1 which is WRONG
 Prediction for b77be7ab is =>0 at state 1 which is WRONG

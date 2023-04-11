@@ -53,37 +53,87 @@ struct cntState //simple state for counters
 
 int main()
 {
-
-    int initialValueOfCounter = 3;
-    vector<cntState> counters(16384, cntState(initialValueOfCounter)); //makes an array of 2^14 counters with the given starting state
-
-
-
-    ifstream branchtrace; branchtrace.open("branchtrace.txt");
-    ofstream outfile("cnt11.txt");
-    int correctPredictions = 0;
-    int total = 0;
-
-    outfile << "VARIANT where initially all counters are in state 11" << endl;
-    outfile << endl;
-
-    if(!branchtrace.is_open())
+    string cntOut[4] = {"cnt00.txt", "cnt01.txt", "cnt10.txt","cnt11.txt"};
+    for (int i = 0; i < 4; i++)
     {
-        cout << "file cannot be opened" << endl; return -1;
-    }    
-    while(branchtrace.good())
-    {
-        string a,b;
-        branchtrace >> a;
-        if(branchtrace.good()) //because sometimes the >> operator duplicates the last one
+        int initialValueOfCounter = i;
+        vector<cntState> counters(16384, cntState(initialValueOfCounter)); //makes an array of 2^14 counters with the given starting state
+        
+        ifstream branchtrace; branchtrace.open("branchtrace.txt");
+        ofstream outfile(cntOut[i]);
+        int correctPredictions = 0;
+        int total = 0;
+        outfile << "array counter VARIANT where initially all counters are in state " << i << endl;
+        outfile << endl;
+        if(!branchtrace.is_open())
         {
+            cout << "file cannot be opened" << endl; return -1;
+        }    
+        while(branchtrace.good())
+        {
+            string a,b;
+            branchtrace >> a;
+            if(branchtrace.good()) //because sometimes the >> operator duplicates the last one
+            {
+                total++;
+                int index = getLeast14(a);
+                
+                int prediction = counters[index].getState(); //getState returns the prediction of the counter object
+                outfile << "Prediction for " << a << " is =>" << prediction << " at state " << counters[index].cnt << " which is ";
+                branchtrace >> b;
+                if((b[0] - '0') == prediction)
+                {
+                    correctPredictions++;
+                    outfile << "CORRECT" << endl; //prints correct if the prediction matches
+                }
+                else
+                {
+                    outfile << "WRONG" << endl; //else it prints wrong if the prediction was incorrect
+                }
+                counters[index].Update(b[0] - '0');
+            }
+        }
+
+        outfile << endl;
+        outfile << "correct = " << correctPredictions << " out of " << total << endl;
+        outfile << " Total Accuracy => " << (double)(correctPredictions)/total << endl; //prints the accuracy as a decimal between 0 to 1
+        outfile << endl;
+
+        outfile.close();
+        branchtrace.close(); 
+    }
+    //ending of branch prediction via array of counters
+
+
+    //using branch history register that stores the outcome of the previous 2 branches
+    //and predicts based on those values. uses the same 2bit counter cntState.
+    
+    //since we are using a 2 bit counter, the prediction for the current branch depends on the previous 2 branches if they are 
+    //branched in the same way, but if their effects cancel out then the prediction depends on the previous 2 branches before them, and so on.
+    //hence prediction depends on all the branches before and the initial state of the counter
+
+    string BhrOut[4] = {"BHR00", "BHR01","BHR10", "BHR11"};
+    for (int i = 0; i < 4; i++)
+    {
+        cntState BranchHistoryRegister(i); //i is the initial value of the branch history register counter
+        ifstream branchtrace("branchtrace.txt");
+        ofstream outfile(BhrOut[i] + ".txt");
+        int correctPredictions = 0, total = 0;
+
+        outfile << "Branch history register VARIANT where initially the counter is in state " << i << "\n\n";
+        
+        //now we will update the values of the counter that we have when we encounter a branch.
+        while(branchtrace.good())
+        {
+            string hexPC; branchtrace >> hexPC;
+            if(!branchtrace.good())
+                break; //as then we have reached the end or a possible duplicate value
             total++;
-            int index = getLeast14(a);
+            int taken; branchtrace >> taken;
             
-            int prediction = counters[index].getState(); //getState returns the prediction of the counter object
-            outfile << "Prediction for " << a << " is =>" << prediction << " at state " << counters[index].cnt << " which is ";
-            branchtrace >> b;
-            if((b[0] - '0') == prediction)
+            int prediction = BranchHistoryRegister.getState(); //getState returns the prediction of the counter object
+            outfile << "Prediction for " << hexPC << " is =>" << prediction << " at state " << BranchHistoryRegister.cnt << " which is ";
+            if(taken == prediction)
             {
                 correctPredictions++;
                 outfile << "CORRECT" << endl; //prints correct if the prediction matches
@@ -92,26 +142,20 @@ int main()
             {
                 outfile << "WRONG" << endl; //else it prints wrong if the prediction was incorrect
             }
-            counters[index].Update(b[0] - '0');
+            BranchHistoryRegister.Update(taken);
         }
+
+        outfile << endl;
+        outfile << "correct = " << correctPredictions << " out of " << total << endl;
+        outfile << " Total Accuracy => " << (double)(correctPredictions)/total << endl; //prints the accuracy as a decimal between 0 to 1
+        outfile << endl;
+
+        outfile.close();
+        branchtrace.close(); 
+
     }
-
-    outfile << endl;
-    outfile << "correct = " << correctPredictions << " out of " << total << endl;
-    outfile << " Total Accuracy => " << (double)(correctPredictions)/total << endl; //prints the accuracy as a decimal between 0 to 1
-    outfile << endl;
-
-    outfile.close();
-    branchtrace.close(); 
-    //ending of branch prediction via array of counters
-
-
-    //using branch history register that stores the outcome of the previous 2 branches
-    //and predicts based on those values. uses the same 2bit counter cntState.
-    branchtrace.open("branchtrace.txt");
-    outfile.open("BHR.txt");
-
     
+ 
 
 
 

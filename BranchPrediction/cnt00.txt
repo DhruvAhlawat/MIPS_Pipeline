@@ -1,4 +1,4 @@
-VARIANT where initially all counters are in state 00
+array counter VARIANT where initially all counters are in state 0
 
 Prediction for b77a8a3a is =>0 at state 0 which is WRONG
 Prediction for b77be7ab is =>0 at state 0 which is WRONG
@@ -550,5 +550,5 @@ Prediction for b77b5c5f is =>1 at state 3 which is CORRECT
 Prediction for b77b5c4d is =>1 at state 3 which is CORRECT
 
 correct = 433 out of 548
- Total Accuracy => 0.790146
+Total Accuracy => 0.790146
 

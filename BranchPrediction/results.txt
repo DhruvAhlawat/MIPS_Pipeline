@@ -1,0 +1,11 @@
+Results for array of 2bit-counters of size 2^14, vs initial state =>
+00 => correct = 433 out of 548, Total Accuracy => 0.790146 
+01 => correct = 460 out of 548, Total Accuracy => 0.839416
+10 => correct = 482 out of 548, Total Accuracy => 0.879562
+11 => correct = 475 out of 548, Total Accuracy => 0.866788
+
+Results for branch history register(2-bit) vs initial state
+00 =>
+01 => correct = 374 out of 548, Total Accuracy => 0.682482
+10 =>
+11 =>
