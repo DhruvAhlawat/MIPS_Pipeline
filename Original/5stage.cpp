@@ -562,14 +562,16 @@ struct MIPS_Architecture
 				return;
 			}
 			else if(instructionType == "lw" && (arch->DataHazards.count(arch->decodeAddress(r[1]).second) && arch->DataHazards[arch->decodeAddress(r[1]).second] < 5)){
-				stall();
-		
+				stall();		
 				return;
 			}
 			else 
 			{	
 				cout << " decoded " << instructionType << " ";
-				arch->DataHazards.insert({r[0],2});
+				if(instructionType != "sw")
+				{
+					arch->DataHazards.insert({r[0],2});
+				}
 				L2->IDisStalling = false;
 				isStalling = false; 
 			}
