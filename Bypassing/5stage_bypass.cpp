@@ -1,8 +1,3 @@
-/**
- * @file MIPS_Processor.hpp
- * @author Mallika Prabhakar and Sayam Sethi
- * 
- */
 
 #ifndef __MIPS_PROCESSOR_HPP__
 #define __MIPS_PROCESSOR_HPP__
@@ -376,7 +371,8 @@ struct MIPS_Architecture
 		file.close();
 	}
 
-	map<string,int> DataHazards;
+	map<string,pair<int,int>> DataHazards; //the first int denotes the stage the value is in currently, while the second one denotes the type of instruction
+	//that is causing the hazard. Since for lw the data appears first after DM into L5 while in normal add,sub etc the data is generated right in L4 itself
 
 
 	struct IFID //basically the L2 latch, used to transfer values between IF and ID stage

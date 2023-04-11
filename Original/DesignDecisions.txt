@@ -1,1 +1,2 @@
 DM stage takes a full cycle, hence stalling is done till the DM stage is complete incase of DataHazards
+i have made two objects in 7-9 pipeline for writeback stage as it might be possible that we are using WB in this stage for both one in 7 and one in 9

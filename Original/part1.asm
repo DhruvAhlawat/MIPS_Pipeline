@@ -1,6 +1,16 @@
-addi $s0, $0, 6
-addi $s1, $0, 3
-mul $s2, $s0, $s1
+addi $t0,$0,4
+addi $t2,$0,15
+beq $t0 ,$t2 , exit 
+addi $t3 , $s0 , -1
+exit:
+ 
+
+
+
+
+
+
+
 
 
 
