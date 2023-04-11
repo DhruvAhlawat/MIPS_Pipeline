@@ -556,10 +556,19 @@ struct MIPS_Architecture
 				stall(); 
 				return;
 			}
-			else if(instructionType == "sw" && (arch->DataHazards.count(r[0]) && arch->DataHazards[r[0]] < 5))
+			else if(instructionType == "sw" && ))
 			{
-				stall();
-				return;
+				pair<int,string> cur arch->decodeAddress(r[1]);
+				if(arch->DataHazards.count(cur.second) && arch->DataHazards[cur.second] < 5)
+				{
+					stall();
+					return;
+				}
+				if((arch->DataHazards.count(r[0]) && arch->DataHazards[r[0]] < 5))
+				{
+					stall();
+					return;
+				}
 			}
 			else if(instructionType == "lw" && (arch->DataHazards.count(arch->decodeAddress(r[1]).second) && arch->DataHazards[arch->decodeAddress(r[1]).second] < 5)){
 				stall();
