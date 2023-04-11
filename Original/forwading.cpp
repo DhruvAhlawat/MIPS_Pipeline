@@ -817,7 +817,7 @@ struct MIPS_Architecture
             }
 			r1 = L3->curWriteReg;
 			cout<<r1<<" "<<arch->DataHazards[r1].first<<" ";
-			if(arch->DataHazards[r1].first == 0){
+			if(arch->DataHazards[r1].first == 6){
 				arch->DataHazards[r1].first=3;
 			}
 			if(arch->DataHazards.count(r1) == 0){
@@ -852,12 +852,12 @@ struct MIPS_Architecture
 				if(L4->isStoreforward1 == true){  
 					L4->nextSWdata = L4->dependentvalue;
 				}
-				cout<<s1<<" ";
+				// cout<<s1<<" ";
 				dataValues[1] = arch->registers[arch->registerMap[s1]];  
 				if(L4->isStoreforward2 == true){
 					dataValues[1] = L4->dependentvalue;
 				}
-				cout<<dataValues[1]<<" ";
+				// cout<<dataValues[1]<<" ";
 			}
 			result = calc();
 			L4->nextReg = r1; L4->nextDataIn = result; 
