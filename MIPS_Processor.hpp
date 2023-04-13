@@ -304,9 +304,17 @@ struct MIPS_Architecture
 				std::cout << '\n';
 			}
 		}
-		
 	}
-
+	int instructionNumber(string s)
+	{
+		if(s == "add" || s == "and" || s == "sub" || s == "mul" || s == "or" || s == "slt")
+			return 0;
+		else if(s == "addi" || s == "andi" || s == "ori" || s == "srl" || s == "sll")
+			return 1;
+		else if(s == "lw" || s == "sw")
+			return 2;
+		return 3;
+	}
 	// parse the command assuming correctly formatted MIPS instruction (or label)
 	void parseCommand(std::string line)
 	{
