@@ -552,7 +552,7 @@ struct MIPS_Architecture
 				 L3->register1 = res.second;    
 				 L3->register2 = "";      //second will be blank
 				 if((arch->DataHazards.count(res.second)>0 && arch->DataHazards[res.second].first < 5)){  //checking for the dependency of  res.second 
-					arch->DataHazards[res.second].first = 3; 
+					arch->DataHazards[res.second].first = 3;  //changed
 					if(arch->outputFormat == 0)
 					cout << "load forwarding"<<" ";   
 				 }
@@ -636,24 +636,17 @@ struct MIPS_Architecture
 				if(arch->DataHazards.count(r[1])>0){
 				latchAndType = {arch->DataHazards[r[1]].first,0};
 				}
-				else{
-                latchAndType = {6,0};
-				}
 			}
 			if(r[0]==r[2]){
 				if(arch->DataHazards.count(r[2])>0){
 				latchAndType = {arch->DataHazards[r[2]].first,0};
-				}
-				else{
-                latchAndType = {6,0};
-				}
+				}	
 			}
 			if(arch->outputFormat == 0)
 			cout << "added " << r[0] << " intp datahazard with " << latchAndType.first<<" "; 
-			if(instructionType!="lw")
 			arch->DataHazards[r[0]] = latchAndType; //changed
 			
-			// cout<<r[0]<<" "<<arch->DataHazards[r[0]].first<<" ";
+			cout<<r[0]<<" "<<arch->DataHazards[r[0]].first<<" ";
 			} 
 			L2->IDisStalling = false;
 			isStalling = false;
@@ -898,16 +891,16 @@ struct MIPS_Architecture
             }
 			L3->isbranch = false;
 			cout<<r1<<" "<<arch->DataHazards[r1].first<<" ";
-			// if((arch->DataHazards[r1].first == 0 || arch->DataHazards[r1].first == 6)  && iType!="sw" && iType!="lw"){
-			// 	arch->DataHazards[r1].first=3;
-			// }
-			// if(arch->DataHazards.count(r1) == 0 && iType!="sw"){
-			// 	pair<int,int> latchAndType = {3,0};
-			// 	if(iType == "lw"){
-			// 		latchAndType.second++;
-			// 	}
-			// arch->DataHazards[r1] = latchAndType;
-			// }
+			if((arch->DataHazards[r1].first == 0)  && iType!="sw" && iType!="lw"){
+				arch->DataHazards[r1].first=3;
+			}
+			if(arch->DataHazards.count(r1) == 0 && iType!="sw"){
+				pair<int,int> latchAndType = {3,0};
+				if(iType == "lw"){
+					latchAndType.second++;
+				}
+			arch->DataHazards[r1] = latchAndType;
+			}
             if(L4->whichlatch[s1] == 4 && iType!="lw" && iType!="sw"){
                 dataValues[0] = L4->dependentvalue;   // from stage L4 latch
             } 
@@ -927,7 +920,7 @@ struct MIPS_Architecture
 				if(L4->whichlatch[s1] == 6){    
 					dataValues[1] = arch->registers[arch->registerMap[s1]]; //L5 latch
 				}
-				arch->DataHazards[r1].first = 3;
+				
 			} 
 			if(iType == "sw")
 			{
