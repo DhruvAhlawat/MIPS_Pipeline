@@ -103,7 +103,6 @@ struct IDEX //the L3 register lying between ID and EX
 	}
 
 };
-
 struct ID
 {
 	public:
@@ -184,6 +183,11 @@ struct ID
 				cout << "PC= " << checkforPC;
 			curCommand[0] = "afterJump";
 			stall();
+			if(arch->address[curCommand[1]] >= arch->commands.size())
+			{
+				L3->nextInstructionType = "";
+				L3->nextIsWorking = false; //then we need to stop the execution here
+			}
 			return;
 		}
 
@@ -229,6 +233,12 @@ struct ID
 					cout << "PC= " << checkforPC;
 				curCommand[0] = "afterBranch";
 				stall();
+				if(arch->address[r[2]] >= arch->commands.size())
+				{
+					//cout << arch->address[r[2]] << " and " << arch->commands.size() << endl;
+					L3->nextInstructionType = "branchEnd";
+					// L3->nextIsWorking = false; //then we need to stop the execution here
+				}
 				return;
 			}
 			else
@@ -237,7 +247,12 @@ struct ID
 					cout << "did not branch- bubbled ";
 				L3->nextInstructionType = "";
 				curCommand[0] = "afterBranch";
+				
 				stall();
+				if(arch->PCnext >= arch->commands.size())
+				{
+					L3->nextInstructionType = "branchEnd";
+				}
 			}
 			return;
 		}
@@ -289,8 +304,7 @@ struct ID
 		
 	}
 };
-
-struct EXDM
+struct EXDM //the latch between EX and DM
 {
 	string curReg, nextReg;
 	int curSWdata, nextSWdata;
@@ -327,8 +341,9 @@ struct EX
 
 	void run()
 	{	
-		iType = L3->curInstructionType; 
-		isWorking = L3->curIsWorking;
+		if(iType != "afterBranchEnd")
+			iType = L3->curInstructionType; 
+		isWorking = L3->curIsWorking; 
 		if(arch->outputFormat == 0)
 			cout << " |EX|=> ";
 		checkforPC = L3->PC;
@@ -336,10 +351,18 @@ struct EX
 		if(!isWorking)
 		{
 			L4->curIsWorking = false;
+			cout << isWorking;
 		}
 		if(iType == "")
 		{
 			L4->nextReg = ""; L4->nextDataIn = -1;
+			return;
+		}
+		if(iType == "branchEnd")
+		{
+			L4->nextReg = ""; L4->nextDataIn = -1;
+			L3->nextIsWorking = false;
+			cout << "BranchEnd";
 			return;
 		}
 		dataValues = L3->curData; 
@@ -386,7 +409,6 @@ struct EX
 	}
 
 };
-
 struct DMWB{
 		string currRegister = "";
 		string nextRegister = "";
@@ -403,7 +425,6 @@ struct DMWB{
 				next_data = 0; curIsWorking = nextIsWorking;
 		}
 };
-
 struct DM
 {
 	public:
