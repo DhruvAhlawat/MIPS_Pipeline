@@ -214,8 +214,7 @@ struct ID
 				cout << " decoded " << instructionType << " ";
 			if(instructionType != "sw" && instructionType != "beq" && instructionType != "bne" && instructionType != "j")
 			{
-				DataHazards.insert({r[0],2});
-				//DataHazards.insert({r[1],2});
+				DataHazards[r[0]] = 2;
 			}
 			L2->IDisStalling = false;
 			isStalling = false; 
@@ -320,6 +319,7 @@ struct EXDM //the latch between EX and DM
 		curReg = nextReg; curIsWorking = nextIsWorking;
 		PC = PCrun;
 		nextMemWrite = -1; curSWdata = nextSWdata;
+		nextReg = "";
 	}
 };
 struct EX
