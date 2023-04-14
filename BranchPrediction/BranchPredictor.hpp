@@ -12,21 +12,6 @@
 #include<map>
 using namespace std;
 
-int getLeast14(std::string hex)
-{
-    //will just check the last 4 digits of it, and then remove the 2 msbs
-    int num = 0; int mult = 1;
-    for (int i = hex.size()-1; i >= 4; i--)
-    {
-        if(hex[i] >= 'a')
-            num += (hex[i]-'a'+10)*mult;
-        else
-            num += (hex[i] - '0')*mult;
-        mult *= 16;
-    }
-    num = (num & 16383); //done to get only the first 14 bits. 16383 is 2^14 - 1
-    return num;
-}
 
 struct BranchPredictor {
     virtual bool predict(uint32_t pc) = 0;
@@ -38,55 +23,40 @@ struct SaturatingBranchPredictor : public BranchPredictor {
     SaturatingBranchPredictor(int value) : table(1 << 14, value) {}
 
     bool predict(uint32_t pc) {
-        int index = pc;
-        //  bitset<2> a = bitset<2>("11");
-        // bitset<2> b = bitset<2>("10");
-       if(table[index] == bitset<2>("11") ){
-        return true;
-       }
-       else if(table[index] == bitset<2>("10")){
-        return true;
-       }
-       else{
-        return false;
-       }
+       int index = (pc & 16383); //the 14 lsbs of the pc
+         if(table[index][1] == 1)
+              return true;
+         else
+              return false;
     }
 
     void update(uint32_t pc, bool taken) {
-        int index = pc;
-        bitset<2> a = bitset<2>("11");
-        bitset<2> b = bitset<2>("10");
-        bitset<2> c = bitset<2>("01");
-        bitset<2> d = bitset<2>("00");
-        if(taken == true){
-
-          if(table[index].operator==(a)){
-           table[index].operator=(a);
-          }
-          if(table[index].operator==(b)){
-             table[index].operator=(a);
-          }
-          else if(table[index].operator==(c)){
-              table[index].operator=(b);
-          }
-          else if(table[index].operator==(d)){
-            table[index].operator=(b);
-          }
+        int index = (pc & 16383);
+        if(taken)
+        {
+            if(table[index].count() == 2) return; //if both are already 1
+            if(table[index][0] == 1) //01 goes to 10
+            {
+                table[index][0].flip(); table[index][1].flip();
+            }
+            else //00 goes to 01, 10 goes to 11
+            {
+                table[index][0].flip(); //updating this bit to 1
+            }
         }
-        else{
-             if(table[index].operator==(d)){
-            table[index].operator=(d);
-          }
-          else if((table[index].operator==(c))){
-            table[index].operator=(d);
-          }
-          else if(table[index].operator==(b)){
-              table[index].operator=(c);
-          }
-          else if(table[index].operator==(a)){
-            table[index].operator=(b);
-          }
+        else
+        {
+            if(table[index].count() == 0) return; //if both are already 0
+            if(table[index][0] == 1) //01 or 11 goes to 00 or 10
+            {
+                table[index][0].flip(); //updating this bit to 0
+            }
+            else //10 goes to 01 (00 case is not there as its already taken care of)
+            {
+                table[index][0].flip(); table[index][1].flip();
+            }
         }
+        
     }
 };
 

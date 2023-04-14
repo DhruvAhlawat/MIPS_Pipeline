@@ -1,5 +1,20 @@
 #include<BranchPredictor.hpp>
 
+int getLeast14(std::string hex)
+{
+    //will just check the last 4 digits of it, and then remove the 2 msbs
+    int num = 0; int mult = 1;
+    for (int i = hex.size()-1; i >= 4; i--)
+    {
+        if(hex[i] >= 'a')
+            num += (hex[i]-'a'+10)*mult;
+        else
+            num += (hex[i] - '0')*mult;
+        mult *= 16;
+    }
+    num = (num & 16383); //done to get only the first 14 bits. 16383 is 2^14 - 1
+    return num;
+}
 int main()
 {
     string cntOut[4] = {"cnt00.txt", "cnt01.txt", "cnt10.txt","cnt11.txt"};
@@ -20,17 +35,16 @@ int main()
         }    
         while(branchtrace.good())
         {
-            string a; string b;
+            string a; int b;
             branchtrace >> a;
             if(branchtrace.good()) //because sometimes the >> operator duplicates the last one
             {
                 total++;
                 uint32_t index  = getLeast14(a);
-                outfile<<index<<" ";
                 bool prediction = counters.predict(index);
-                outfile << "Prediction for " << a << " is =>" << prediction << " at state " << b << " which is ";
+                outfile << "Prediction for " << a << ":" << index << " is =>" << prediction << " at state " << b << " which is ";
                 branchtrace >> b;
-                if( b == to_string(prediction))
+                if( b == prediction)
                 {
                     outfile<<"b"<<" "<<prediction;
                     correctPredictions++;
@@ -41,7 +55,7 @@ int main()
                     outfile<<"b"<<" "<<prediction;
                     outfile << "WRONG" << endl; //else it prints wrong if the prediction was incorrect
                 }
-                counters.update(index,stoi(b));
+                counters.update(index,b);
             }
         }
            
