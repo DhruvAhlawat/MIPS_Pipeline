@@ -4,8 +4,10 @@
 #include<set>
 #include<vector>
 #include<iostream>
+
 using namespace std;
-map<string,int> DataHazards;
+#define pint pair<int,int>
+map<string,pair<int,int>> DataHazards;
 
 int stallNumber = 0;
 set<int> pcs;
@@ -14,7 +16,6 @@ struct IFID //basically the L2 latch, used to transfer values between IF and ID 
 	vector<string> currentCommand = {};
 	vector<string> nextCommand = {};
 	int curPc, nextPc;
-	bool curIsWorking = true, nextIsWorking = true; 
 	IFID()
 	{
 		currentCommand = {};
@@ -23,9 +24,9 @@ struct IFID //basically the L2 latch, used to transfer values between IF and ID 
 	void Update()
 	{
 		currentCommand = nextCommand; 
-		curIsWorking = nextIsWorking;
 		curPc = nextPc;
 		nextPc = 0;
+		nextCommand = {};
 	}
 };
 
@@ -51,13 +52,13 @@ struct IF0
 			//then we are supposed to stall and effectively do nothing
 			if(!arch->outputFormat)
 				cout << "**";
+			
 			return;
 		}
 		if(arch->PCnext >= arch->commands.size())
 		{
 			if(!arch->outputFormat)
 				cout << "done";
-			LIF->nextIsWorking = false;
 			return;
 		}
 		arch->PCcurr = arch->PCnext; arch->PCnext++;
@@ -98,13 +99,8 @@ struct IF1
 			//then we are supposed to stall and effectively do nothing
 			if(!arch->outputFormat)
 				cout << "**";
-			return;
-		}
-		if(LIF->curIsWorking == false)
-		{
-			if(arch->outputFormat==0)
-				cout << "done";
-			L2->nextIsWorking = false;
+			LIF->nextPc = LIF->curPc;
+			LIF->nextCommand = LIF->currentCommand;			
 			return;
 		}
 		//else we will work
@@ -129,15 +125,14 @@ struct IDID //the  latch lying between the latch lying between ID0 and ID1
 {
 	// vector<int> curData, nextData;
 	vector<string> curCommand = {}, nextCommand = {};
-	bool curIsWorking = true, nextIsWorking = true;
 	int curPc, nextPc;
 	void Update()
 	{
 		//on getting the updated values, we can run the code
 		// curData = nextData;
 		curCommand = nextCommand;
-		curIsWorking = nextIsWorking;
 		curPc = nextPc;
+		nextCommand = {};
 		//nextInstructionType = ""; //this would ensure that if instruction
 		// type does not get updated, then we won't run any new commands
 	}
@@ -163,13 +158,8 @@ struct ID0
 			//then we are supposed to stall and effectively do nothing
 			if(!arch->outputFormat)
 				cout << "**";
-			return;
-		}
-		if(L2->curIsWorking == false)
-		{
-			if(arch->outputFormat==0)
-				cout << "done";
-			L3->nextIsWorking = false;
+			L2->nextPc = L2->curPc;
+			L2->nextCommand = L2->currentCommand;
 			return;
 		}
 		//else we will work
@@ -185,6 +175,7 @@ struct ID0
 		{
 			//then we need to stall the pipeline
 			stallNumber = 3; //so the next ID0 instruction gets stalled as well.
+			L2->currentCommand = {};
 			//and pass the commands forward as well
 		}
 	}
@@ -193,14 +184,13 @@ struct ID0
 struct IDRR
 {	public:
 	vector<string> curCommand = {}, nextCommand = {};
-	bool curIsWorking = true, nextIsWorking = true;
 	int curOffset = 0, nextOffset = 0;
 	int nextPc= -1, curPc = -1;
 	void Update()
 	{
 		curCommand = nextCommand;
-		curIsWorking = nextIsWorking;
 		curPc = nextPc;
+		nextCommand = {};
 	}
 };
 
@@ -208,7 +198,7 @@ struct ID1
 {
 	MIPS_Architecture *arch;
 	IDID *LID; 	IDRR *L4; 
-	vector<string> curCommand = {};
+	vector<string> curCommand = {}; string instructionType;
 	//ID0 will be responsible for decoding the instruction
 	ID1(MIPS_Architecture *mips, IDID *lid, IDRR *l4)
 	{
@@ -233,14 +223,6 @@ struct ID1
 		{
 			curCommand = LID->curCommand;
 		}
-		if(LID->curIsWorking == false)
-		{
-			if(arch->outputFormat==0)
-				cout << "done";
-			L4->nextIsWorking = false;
-			return;
-		}
-		
 		//else we will work
 		//we will first check if the instruction is a branch, sent from IF1
 		if(curCommand.size() == 0)
@@ -248,29 +230,86 @@ struct ID1
 			L4->nextCommand = curCommand; //passing a no-op
 			return;
 		}
-		L4->nextPc = LID->curPc;
+		instructionType = curCommand[0];
 		if (LID->curCommand[0] == "lw" || LID->curCommand[0] == "sw")
 		{
 			//then we need to do address calculation as well, so we parse the address first
 			pair<int,string> val = arch->decodeAddress(curCommand[2]);	
+
 			L4->nextOffset = val.first;
 			curCommand[2] = val.second; //we replace the address with the register name
-
 		}
-		L4->nextCommand = curCommand;
-		if(LID->curCommand[0] == "beq" || LID->curCommand[0] == "bne")
+		else if(LID->curCommand[0] == "beq" || LID->curCommand[0] == "bne")
 		{
+			if(DataHazards.count(curCommand[3]) && DataHazards[curCommand[3]].first - DataHazards[curCommand[3]].second <= 5)
+			{
+				//then we need to stall the pipeline
+				stallNumber = 3; //so the next ID1 instruction gets stalled as well. //then we stall.
+				LID->nextCommand = LID->curCommand;
+				LID->nextPc = LID->curPc;
+				//and do nothing else
+				//and pass the commands forward as well
+				return; //we return as there is nothing to do. the next stages automatically recieve a no-op
+			}
+			if(DataHazards.count(curCommand[2]) && DataHazards[curCommand[2]].first - DataHazards[curCommand[2]].second <= 5)
+			{
+				//then we need to stall the pipeline
+				stallNumber = 3; //so the next ID1 instruction gets stalled as well. //then we stall.
+				LID->nextCommand = LID->curCommand;
+				LID->nextPc = LID->curPc;
+				//and do nothing else
+				//and pass the commands forward as well
+				return; //we return as there is nothing to do. the next stages automatically recieve a no-op
+			}
 			//then we need to stall the pipeline
 			stallNumber = 4; //so the next ID1 instruction gets stalled as well.
+			LID->curCommand = {};
+			//and do nothing else
 			//and pass the commands forward as well	
 		}
+		else
+		{
+			//either it is num 0 or num 1 type instruction, both of which have the first register as a dataHazard.
+			if(arch->instructionNumber(instructionType) == 0)
+			{
+				//check dependency for the second register
+				if(DataHazards.count(curCommand[3]) && DataHazards[curCommand[3]].first - DataHazards[curCommand[3]].second <= 5)
+				{
+					//then we need to stall the pipeline
+					stallNumber = 3; //so the next ID1 instruction gets stalled as well. //then we stall.
+					LID->nextCommand = LID->curCommand;
+					LID->nextPc = LID->curPc;
+					//and do nothing else
+					//and pass the commands forward as well
+					return; //we return as there is nothing to do. the next stages automatically recieve a no-op
+				}
+			}
+			if(DataHazards.count(curCommand[2]) && DataHazards[curCommand[2]].first - DataHazards[curCommand[2]].second <= 5 )
+			{
+				//then we need to stall the pipeline
+				stallNumber = 3; //so the next ID1 instruction gets stalled as well. //then we stall.
+				LID->nextCommand = LID->curCommand;
+				LID->nextPc = LID->curPc;
+				//and do nothing else
+				//and pass the commands forward as well
+				return; //we return as there is nothing to do. the next stages automatically recieve a no-op
+			}
+			//otherwise we anyway have to check the dependency for the first register
+			stallNumber = 0; //reset the stall number otherwise
+		}
+		if(instructionType != "sw" && instructionType != "beq" && instructionType != "bne" && instructionType != "j")
+		{
+			DataHazards[curCommand[1]].first = 3;
+			DataHazards[curCommand[1]].second = (instructionType == "lw" ? 2 : 0); //the datahazard is inserted here
+		}
+		L4->nextPc = LID->curPc; L4->nextCommand = curCommand;
+		
 	}
 };
 struct RREX //the latch lying between RR and EX
 {
 	vector<int> curData = {}, nextData = {};
 	vector<string> curCommand,nextCommand;
-	bool curIsWorking = true, nextIsWorking = true;
 	string curWriteReg, nextWriteReg;
 	int curPC = -1, nextPC = 0;
 	void Update()
@@ -278,7 +317,6 @@ struct RREX //the latch lying between RR and EX
 		//on getting the updated values, we can run the code
 		curData = nextData;
 		curCommand = nextCommand;
-		curIsWorking = nextIsWorking;
 		curWriteReg = nextWriteReg;
 		nextCommand = {};
 		curPC = nextPC;
@@ -319,13 +357,6 @@ struct RR
 		{
 			curCommand = L4->curCommand;
 		}
-		if(L4->curIsWorking == false)
-		{
-			if(arch->outputFormat==0)
-				cout << "done";
-			L4->nextIsWorking = false;
-			return;
-		}
 		//else we will work
 		if(curCommand.size() == 0)
 		{
@@ -344,15 +375,8 @@ struct RR
 		// else
 		// 	regVal[1] = arch->registers[arch->registerMap[curCommand[3]]]; //getting its value normally
 
-		writeReg = curCommand[1]; 
-		if(curCommand[0] == "beq" || curCommand[0] == "bne")
-		{
-			//then we need to stall the pipeline
-			stallNumber = 5; //so the next RR instruction gets stalled as well.
-			//and pass the commands forward as well	
-		}
-		
-		else if(arch->instructionNumber(curCommand[0]) == 2)
+		writeReg = curCommand[1]; 		
+		if(arch->instructionNumber(curCommand[0]) == 2)
 		{
 			//then we need to take the 9 stage pipeline path
 			if(!arch->outputFormat)
@@ -375,7 +399,17 @@ struct RR
 			L5r->nextCommand = curCommand;
 			L5r->nextWriteReg = writeReg;
 			L5r->nextData = regVal; //passing the data to ALU of the r type (7 stage) instruction
-			if(!arch->outputFormat) {
+			if(curCommand[0] == "beq" || curCommand[0] == "bne")
+			{
+				//then we need to stall the pipeline
+				curCommand = {};
+				stallNumber = 5; //so the next RR instruction gets stalled as well.
+				//and pass the commands forward as well	
+				if(!arch->outputFormat)
+					cout << "sent branch values ";
+				
+			}
+			else if(!arch->outputFormat) {
 				cout << "Rtype ";
 				cout << "passed " << regVal[0] << " " << regVal[1] << " "; 
 			}
@@ -390,13 +424,12 @@ struct EXDM
 	int curSWdata, nextSWdata;
 	int curAddr, nextAddr;
 	int curPC = -1, nextPC = -1;
-	bool curIsWorking = true, nextIsWorking = true;
 	void Update()
 	{
 		// curAddr = nextAddr; curReg = nextReg;
 		curCommand = nextCommand; nextCommand = {};
 		curAddr = nextAddr;
-		curReg = nextReg; curIsWorking = nextIsWorking;
+		curReg = nextReg; 
 		curSWdata = nextSWdata;
 		curPC = nextPC; nextPC = -1;
 	}
@@ -406,14 +439,12 @@ struct LWB
 {
 	string curReg, nextReg;
 	int curDataOut, nextDataOut;
-	bool curIsWorking = true, nextIsWorking = true;
 	bool curIsUsingWriteBack = false, nextIsUsingWriteBack = false;
 	int curPC = -1, nextPC = -1;
 	void Update()
 	{
 		curReg = nextReg; curDataOut = nextDataOut;
 		nextReg = "";
-		curIsWorking = nextIsWorking;
 		curIsUsingWriteBack = nextIsUsingWriteBack;
 		nextIsUsingWriteBack = false;
 		curPC = nextPC; nextPC = -1;
@@ -436,7 +467,6 @@ struct DM0
 		L8->nextPC = L7->curPC; //PC update
 		L8->nextAddr = L7->curAddr;
 		L8->nextCommand = L7->curCommand;
-		L8->nextIsWorking = L7->curIsWorking;
 		L8->nextReg = L7->curReg;
 		L8->nextSWdata = L7->curSWdata; 							
 	}
@@ -456,10 +486,7 @@ struct DM1
 	{
 		if(arch->outputFormat==0)
 			cout << "|DM1|=>";
-		if(L8->curIsWorking == false)
-		{
-			return;
-		}
+
 		if(L8->curCommand.size() == 0)
 		{
 			// L6->nextIsWorking = false;
@@ -488,7 +515,7 @@ struct DM1
 struct EX
 {	
 	public:
-	bool isWorking = true; int swData;
+	int swData;
 	MIPS_Architecture *arch; RREX *L5; EXDM *L7; LWB *L6;
 	string iType = "";
 	vector<int> dataValues; 
@@ -523,11 +550,6 @@ struct EX
 			dataValues = L5->curData; //getting the data from L3 in the nonforwarding case
 			r0 = L5->curCommand[1]; //the register to be written into
 		}
-		if(L5->curIsWorking == false)
-		{
-			L7->nextIsWorking = false;
-			return;
-		}
 		
 		//else we will work
 		if(arch->instructionNumber(L5->curCommand[0]) == 2)
@@ -538,7 +560,7 @@ struct EX
 			//and dataValues[2] will be the data to be written into the memory incase of sw
 			int address = dataValues[0] + dataValues[1]; //this is indeed the address
 			if(address%4 != 0) cerr << "Error: Address not word aligned" << endl;
-			address = address/4;
+				address = address/4;
 			if(arch->outputFormat == 0) cout << "address: " << address << " ";
 			L7->nextCommand = L5->curCommand;
 			L7->nextAddr = address;
@@ -548,6 +570,30 @@ struct EX
 		else
 		{
 			//then this EX is of the 7stage pipeline path
+			if(L5->curCommand[0] == "beq" || L5->curCommand[0] == "bne")
+			{
+				stallNumber = 0;
+				if((L5->curCommand[0] == "bne")^(dataValues[0] == dataValues[1]))
+				{
+					//then we branch
+					L6->nextPC = L5->curPC; //PC update
+					arch->j(L5->curCommand[3],"",""); //this moves the pc
+					L6->nextIsUsingWriteBack = false;
+					if(!arch->outputFormat)
+						cout << "branched " << L6->nextPC << " ";
+					return;
+				}
+				else
+				{
+					//then we do not branch
+					L6->nextPC = L5->curPC; //PC update
+					L6->nextIsUsingWriteBack = false;
+					if(!arch->outputFormat)
+						cout << "not branch " << L6->nextPC << " ";
+					return;
+				}
+			}
+
 			L6->nextPC = L5->curPC; //PC update
 			int result = calc();
 			if(arch->outputFormat == 0) cout << "Result: " << result << " ";
@@ -555,7 +601,6 @@ struct EX
 			L6->nextReg = r0;
 			L6->nextDataOut = result;
 		}
-
 	}
 	int calc()
 	{
@@ -582,7 +627,6 @@ struct EX
 
 struct WB
 {	public:
-	bool isWorking = true;
 	MIPS_Architecture *arch; LWB *dmwb, *exwb, *usingLatch;
 	int dataOut = 0; string reg = ""; int curPc = -1;
 	WB(MIPS_Architecture *architecture, LWB *lwb1, LWB *lwb2)
@@ -594,6 +638,7 @@ struct WB
 		if(arch->outputFormat == 0)
 			cout << "|WB|=> ";
 		//check which one of these requires the writeback port, or if none require it.
+		pcs.erase(dmwb->curPC); pcs.erase(exwb->curPC); 
 		if(dmwb->curIsUsingWriteBack && !(exwb->curIsUsingWriteBack))
 		{
 			usingLatch = dmwb;
@@ -612,10 +657,11 @@ struct WB
 			//so we do nothing
 			// cerr << "both writing??";
 		}
-		pcs.erase(dmwb->curPC); pcs.erase(exwb->curPC); //erasing both of those pcs
+		//erasing both of those pcs
 		reg = usingLatch->curReg; dataOut = usingLatch->curDataOut;
 		curPc = usingLatch->curPC; //with this we get the pc 
-		cout << "pcI:" << dmwb->curPC << "pcR:" << exwb->curPC  << " ";
+		if(arch->outputFormat == 0)
+			cout << "pcI:" << dmwb->curPC << "pcR:" << exwb->curPC  << " ";
 		if(reg != "")
 		{
 			arch->registers[arch->registerMap[reg]] = dataOut;
@@ -630,7 +676,7 @@ void HazardUpdate(int maxVal)
 		auto i = DataHazards.begin();
 		while(i != DataHazards.end())
 		{
-			if(++(i->second) >= maxVal)
+			if(++(i->second.first) >= maxVal)
 			{
 				auto t = i;
 				i++; DataHazards.erase(t);
@@ -668,10 +714,11 @@ void ExecutePipelined(MIPS_Architecture *arch)
 		int i = 12;
 		do
 		{
-			fetch0.run(); 
-			fetch1.run(); 
+			
+			decode1.run();
 			decode0.run(); 
-			decode1.run(); 
+			fetch0.run(); 
+			fetch1.run();  
 			readReg.run();
 			ALUi.run(); ALUr.run();
 			dataMem0.run(); dataMem1.run();
@@ -687,17 +734,26 @@ void ExecutePipelined(MIPS_Architecture *arch)
 			L7.Update();
 			L8i.Update();
 			L9.Update();
-			// if(arch->outputFormat == 0) 
-			// {	
-			// 	std::cout << " dataHazards are : ";
-			// 	for(auto i: DataHazards)
-			// 	{	
-			// 		std::cout << i.first << " " << i.second << ", ";
-			// 	}
-			// }
+			if(arch->outputFormat == 0) 
+			{	
+				std::cout << " dataHazards are : ";
+				for(auto i: DataHazards)
+				{	
+					std::cout << i.first << " " << i.second.first <<   ", ";
+				}
+			}
 			
-			HazardUpdate(6); //updating the hazards
+			HazardUpdate(8); //updating the hazards
 			clockCycles++;
+			if(arch->outputFormat == 0)
+			{
+				cout << "^";
+				for (auto i: pcs)
+				{
+					cout << i << ".";
+				}
+			}
+			
 			arch->printRegisters(clockCycles);
 			//cout << endl << " at clockCycles " << clockCycles << endl;
 			std::cout << endl;
