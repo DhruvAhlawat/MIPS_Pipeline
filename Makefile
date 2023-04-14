@@ -3,10 +3,10 @@ all: run5 run79
 ./FiveStage/5stage.exe: ./FiveStage/5stage.cpp 
 	g++ -I C:/Users/tripl/Documents/boost_1_62_0/boost_1_62_0 -I .  .\FiveStage\5stage.cpp -o .\FiveStage\5stage
 
-./FiveStage/5stage_bypass.exe: ./FiveStage/5stage_bypass.cpp
+./FiveStage/5stage_bypass.exe: ./FiveStage/5stage_bypass.cpp ./MIPS_Processor.hpp
 	g++ -I C:/Users/tripl/Documents/boost_1_62_0/boost_1_62_0 -I .  .\FiveStage\5stage_bypass.cpp -o .\FiveStage\5stage_bypass
 
-bypass: ./FiveStage/5stage_bypass.exe ./FiveStage/5stage_bypass.cpp
+bypass: ./FiveStage/5stage_bypass.exe ./FiveStage/5stage_bypass.cpp 
 	./FiveStage/5stage_bypass.exe "sample.asm"
 
 

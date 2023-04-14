@@ -225,12 +225,49 @@ struct ID
 			}
 			return;
 		}
- 
-		if(curInstruction == 2)
+
+		if(instructionType == "beq" || instructionType == "bne") //doing the entire BEQ and BNE process in ID step itself, while introducing a bubble in the pipeline where nothing gets done
+		{
+			if(instructionType == "beq")
+				L3->nextIsBranch = 1;
+			else
+				L3->nextIsBranch = 2;
+			dataValues[0] = arch->registers[arch->registerMap[r[0]]];
+			dataValues[1] = arch->registers[arch->registerMap[r[1]]];
+			if(!DataHazards.count(r[0]))
+			{
+				L3->nextWhichLatch[0] = 0; //because the value is generated here
+			}
+			else
+			{
+				//else its a dataHazard, there may be a stall required if the instruction was of I type and just before this one
+				if(calculateLatch(r[0], L3->nextWhichLatch[0])) //returns true if we are stalling and should return
+					return;
+			}
+			if(!DataHazards.count(r[1]))
+			{
+				L3->nextWhichLatch[1] = 0; //because the value is generated here
+			}
+			else
+			{
+				//else its a dataHazard, there may be a stall required if the instruction was of I type and just before this one
+				if(calculateLatch(r[1], L3->nextWhichLatch[1])) //returns true if we are stalling and should return
+					return;
+			}
+			dataValues[2] = arch->address[r[2]]; //the address can be decoded rightaway as it is static
+			r[0] = r[2]; //but we are still passing it as a string through this
+			bool isEqual = (dataValues[0] == dataValues[1]);
+			curCommand[0] = "afterBranch";
+			stall();
+			UpdateL3();
+			// 	L3->nextInstructionType = "branchEnd"; //incase the branch goes out of bounds, will handle in EX itself.
+			// L3->nextInstructionType = instructionType;
+			return;
+		}
+		else if(curInstruction == 2)
 		{
 			//this is when we are in lw and sw, in this case for the address variable,
 			//a similar procedure would be done as in the case of R type registers
-			cout << curInstruction << ".";
 			pair<int,string> res = arch->decodeAddress(r[1]);    // we implemented a new function decodeAddress which correctly decodes as string and int 
 			dataValues[0] = res.first;
 			dataValues[1] = arch->registers[arch->registerMap[res.second]];	
@@ -270,7 +307,6 @@ struct ID
 				{
 					//else its a dataHazard, there may be a stall required if the instruction was of I type and just before this one
 					L3->nextWhichLatch[2] = DataHazards[r[0]].first; //this can either be 3 or 4
-					cout << "updated nextWhichLatch2 to " << DataHazards[r[0]].first;
 					//if this is 3, then we can take the value from L5 when we reach DM.
 					//if this is 4, then we can take the value from L5 when we reach EX.
 				}
@@ -319,24 +355,7 @@ struct ID
 					return;
 			}
 		}
-		//Checking Dependencies first
-		// if((DataHazards.count(r[1]) && DataHazards[r[1]].first < 5) ||
-		// 	(DataHazards.count(r[2]) && DataHazards[r[2]].first < 5) || 
-		// 	((instructionType == "beq" || instructionType == "bne") && DataHazards.count(r[0]) && DataHazards[r[0]].first < 5))
-		// {
-		// 	stall(); 
-		// 	return;
-		// }
-		// else if(instructionType == "sw" && (DataHazards.count(r[0]) && DataHazards[r[0]].first < 5 || (DataHazards.count(arch->decodeAddress(r[1]).second) && DataHazards[arch->decodeAddress(r[1]).second].first < 5)))
-		// {
-		// 	stall();
-		// 	return;
-		// }
-		// else if(instructionType == "lw" && (DataHazards.count(arch->decodeAddress(r[1]).second) && DataHazards[arch->decodeAddress(r[1]).second].first < 5)){
-		// 	stall();		
-		// 	return;
-		// }
-		//else 
+
 		{	
 			if(arch->outputFormat == 0)
 				cout << " decoded " << instructionType << " ";
@@ -348,48 +367,7 @@ struct ID
 			L2->IDisStalling = false;
 			isStalling = false; 
 		}
-		if(instructionType == "beq" || instructionType == "bne") //doing the entire BEQ and BNE process in ID step itself, while introducing a bubble in the pipeline where nothing gets done
-		{
-			if(instructionType == "beq")
-				L3->nextIsBranch = 1;
-			else
-				L3->nextIsBranch = 2;
-			dataValues[0] = arch->registers[arch->registerMap[r[0]]];
-			dataValues[1] = arch->registers[arch->registerMap[r[1]]];
-			dataValues[2] = arch->address[r[2]];
-			r[0] = r[2];
-			bool isEqual = (dataValues[0] == dataValues[1]);
-			curCommand[0] = "afterBranch";
-			if((isEqual^(instructionType == "bne")))
-			{
-				// if(arch->outputFormat == 0)
-				// 	cout << "branched to instruction number " << arch->address[r[2]];
-				// arch->j(r[2],"", ""); 
-				// if(arch->outputFormat == 0)
-				// 	cout << "PC= " << checkforPC;
-				stall();
-				if(arch->address[r[2]] >= arch->commands.size())
-				{
-					//cout << arch->address[r[2]] << " and " << arch->commands.size() << endl;
-					L3->nextInstructionType = "branchEnd";
-					// L3->nextIsWorking = false; //then we need to stop the execution here
-				}
-			}
-			else
-			{
-				if(arch->outputFormat == 0)
-					cout << "did not branch- bubbled ";
-				L3->nextInstructionType = "";
-				stall();
-				if(arch->PCnext >= arch->commands.size())
-				{
-					L3->nextInstructionType = "branchEnd";
-				}
-			}
-			L3->nextInstructionType = instructionType;
-			//return;
-		}
-		
+	
 		if(!isStalling)
 			if(arch->outputFormat == 0)
 				cout << dataValues[0] << " and " << dataValues[1] << " "<<"PC="<< checkforPC;
@@ -472,7 +450,6 @@ struct EX
 		if(!isWorking)
 		{
 			L4->nextIsWorking = false;
-			cout << isWorking;
 		}
 		if(iType == "")
 		{
@@ -518,6 +495,12 @@ struct EX
 			{
 				if(arch->outputFormat == 0)
 					cout << "did not branch ";
+			}
+			if(arch->PCnext >= arch->commands.size())
+			{
+				L4->nextReg = ""; L4->nextDataIn = -1;
+				L3->nextIsWorking = false;
+				return;
 			}
 			return;
 		}
@@ -595,11 +578,11 @@ struct DM
 		}
 		reg = L4->curReg; memWrite = L4->curMemWrite; dataIn = L4->curDataIn;
 		swData = L4->curSWdata;
-		cout << "DM running";
 		//updated all the values using the latch L4
 		if(L4->curWhichLatch[2] == 3)
 		{
-			cout << "forwarded from L5";
+			// if(arch->outputFormat == 0)
+			// 	cout << "forwarded from L5";
 			swData = L5->curr_data; //forwarding the value from the L5 latch
 		}
 		if(reg == "")
