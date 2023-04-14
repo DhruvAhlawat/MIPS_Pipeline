@@ -191,6 +191,7 @@ struct IDRR
 		curCommand = nextCommand;
 		curPc = nextPc;
 		nextCommand = {};
+		curOffset = nextOffset;
 	}
 };
 
@@ -217,6 +218,8 @@ struct ID1
 			//then we are supposed to stall and effectively do nothing
 			if(!arch->outputFormat)
 				cout << "**";
+			LID->nextPc = LID->curPc;
+			LID->nextCommand = LID->curCommand;
 			return;
 		}
 		else
@@ -234,14 +237,14 @@ struct ID1
 		if (LID->curCommand[0] == "lw" || LID->curCommand[0] == "sw")
 		{
 			//then we need to do address calculation as well, so we parse the address first
+			
 			pair<int,string> val = arch->decodeAddress(curCommand[2]);	
-
 			L4->nextOffset = val.first;
 			curCommand[2] = val.second; //we replace the address with the register name
-		}
-		else if(LID->curCommand[0] == "beq" || LID->curCommand[0] == "bne")
-		{
-			if(DataHazards.count(curCommand[3]) && DataHazards[curCommand[3]].first - DataHazards[curCommand[3]].second <= 5)
+			//now we check for data hazards
+			bool shouldStall = (LID->curCommand[0] == "sw" && (DataHazards.count(curCommand[1]) && DataHazards[curCommand[1]].first - DataHazards[curCommand[1]].second <= 5));
+			shouldStall = shouldStall || (DataHazards.count(curCommand[2]) && DataHazards[curCommand[2]].first - DataHazards[curCommand[2]].second <= 5);
+			if(shouldStall)
 			{
 				//then we need to stall the pipeline
 				stallNumber = 3; //so the next ID1 instruction gets stalled as well. //then we stall.
@@ -251,14 +254,19 @@ struct ID1
 				//and pass the commands forward as well
 				return; //we return as there is nothing to do. the next stages automatically recieve a no-op
 			}
-			if(DataHazards.count(curCommand[2]) && DataHazards[curCommand[2]].first - DataHazards[curCommand[2]].second <= 5)
+			else stallNumber = 0; //if we're not stalling
+		}
+		else if(LID->curCommand[0] == "beq" || LID->curCommand[0] == "bne")
+		{
+			bool shouldStall = (DataHazards.count(curCommand[3]) && DataHazards[curCommand[3]].first - DataHazards[curCommand[3]].second <= 5);
+			shouldStall = shouldStall || (DataHazards.count(curCommand[2]) && DataHazards[curCommand[2]].first - DataHazards[curCommand[2]].second <= 5);
+			if(shouldStall)
 			{
 				//then we need to stall the pipeline
 				stallNumber = 3; //so the next ID1 instruction gets stalled as well. //then we stall.
 				LID->nextCommand = LID->curCommand;
 				LID->nextPc = LID->curPc;
-				//and do nothing else
-				//and pass the commands forward as well
+				//and do nothing else //and pass the commands forward as well
 				return; //we return as there is nothing to do. the next stages automatically recieve a no-op
 			}
 			//then we need to stall the pipeline
@@ -303,12 +311,11 @@ struct ID1
 			DataHazards[curCommand[1]].second = (instructionType == "lw" ? 2 : 0); //the datahazard is inserted here
 		}
 		L4->nextPc = LID->curPc; L4->nextCommand = curCommand;
-		
 	}
 };
 struct RREX //the latch lying between RR and EX
 {
-	vector<int> curData = {}, nextData = {};
+	vector<int> curData = vector<int>(3,0), nextData = vector<int>(3,0);
 	vector<string> curCommand,nextCommand;
 	string curWriteReg, nextWriteReg;
 	int curPC = -1, nextPC = 0;
@@ -381,15 +388,15 @@ struct RR
 			//then we need to take the 9 stage pipeline path
 			if(!arch->outputFormat)
 				cout << "Itype ";
-			nextOffset = L4->nextOffset;
+			nextOffset = L4->curOffset;
 			regVal[1] = nextOffset; 
+			regVal[2] = arch->registers[arch->registerMap[curCommand[1]]]; //getting the value of the register
 			// L5r->nextCommand = {}; //passing a no-op
 			L5i->nextPC = L4->curPc;
 			L5i->nextWriteReg = writeReg;
 			L5i->nextData = regVal; //passing the data to ALU of the i type (9 stage) instruction
 			L5i->nextCommand = curCommand; 
-
-			cout << curCommand[0] << " " << regVal[0] << "+" << regVal[1]; // << "data-" <<  << " ";
+			cout << curCommand[0] << " " << nextOffset << "+" << regVal[0] << "for " << curCommand[1] <<":" << regVal[2] ; // << "data-" <<  << " ";
 		}
 		else
 		{
@@ -548,7 +555,7 @@ struct EX
 			}
 			iType = L5->curCommand[0];
 			dataValues = L5->curData; //getting the data from L3 in the nonforwarding case
-			r0 = L5->curCommand[1]; //the register to be written into
+			r0 = L5->curCommand[1];   //the register to be written into
 		}
 		
 		//else we will work
@@ -561,11 +568,11 @@ struct EX
 			int address = dataValues[0] + dataValues[1]; //this is indeed the address
 			if(address%4 != 0) cerr << "Error: Address not word aligned" << endl;
 				address = address/4;
-			if(arch->outputFormat == 0) cout << "address: " << address << " ";
+			if(arch->outputFormat == 0) cout << "address: " << address << " " << "<-" << dataValues[2];
 			L7->nextCommand = L5->curCommand;
 			L7->nextAddr = address;
 			L7->nextReg = r0;
-			L7->nextSWdata = dataValues[2]; //this is the data to be written into the memory incase of sw
+			L7->nextSWdata = dataValues[2]; //this is the data to be written into the memory incase of sw       
 		}
 		else
 		{
