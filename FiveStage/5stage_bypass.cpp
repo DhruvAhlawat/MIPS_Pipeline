@@ -4,6 +4,9 @@
 using namespace std;
 map<string,pair<int,int>> DataHazards; //the first of the pair is the latch number and the second one is the type of instruction
 
+
+
+
 struct IFID //basically the L2 latch, used to transfer values between IF and ID stage
 {
 	vector<string> currentCommand = {};
@@ -25,7 +28,6 @@ struct IFID //basically the L2 latch, used to transfer values between IF and ID 
 		PC = PCrun;
 	}
 };
-
 struct IF
 {
 	public:
@@ -69,7 +71,6 @@ struct IF
 		}
 	}
 };
-
 int instructionNumber(string s)
 {
 	if(s == "add" || s == "and" || s == "sub" || s == "mul" || s == "or" || s == "slt")
@@ -80,7 +81,6 @@ int instructionNumber(string s)
 		return 2;
 	return 3;
 }
-
 struct IDEX //the L3 register lying between ID and EX
 {
 	vector<int> curData, nextData;
@@ -89,7 +89,7 @@ struct IDEX //the L3 register lying between ID and EX
 	bool IDisStalling = false;
 	bool curIsWorking = true, nextIsWorking = true;
 	int curIsBranch = 0, nextIsBranch = 0; //0 means not a branch value, 1 means beq and 2 means bne
-	vector<int> curWhichLatch = vector<int>(2,0), nextWhichLatch = vector<int>(2,0);
+	vector<int> curWhichLatch = vector<int>(3,0), nextWhichLatch = vector<int>(3,0);
 	int PC;
 	int PCrun;
 	string secondregister="";
@@ -104,7 +104,7 @@ struct IDEX //the L3 register lying between ID and EX
 		curIsBranch = nextIsBranch; 
 		nextIsBranch = 0;
 		curWhichLatch = nextWhichLatch;
-		nextWhichLatch = vector<int>(2,0);
+		nextWhichLatch = vector<int>(3,0);
 		// type does not get updated, then we won't run any new commands
 	}
 
@@ -128,6 +128,34 @@ struct ID
 		arch = architecture;
 		L2 = ifid;
 		L3 = idex;
+	}
+	bool calculateLatch(string reg, int &nextWhichLatch)
+	{
+		if(DataHazards[reg].first >= 5)
+		{
+			nextWhichLatch = 0; //as this will also be computed right here, no stalls required or forwarding
+		}
+		else if(DataHazards[reg].second == 1)
+		{
+			if(DataHazards[reg].first == 3)
+			{
+				//then we need to stall. 
+				if(arch->outputFormat == 0) cout << "stalling because I-R dependency";
+				stall();
+				return true;
+			}
+			//else we do not need to stall it. where to take the values from
+			nextWhichLatch = 5; //else it can only be 5.
+			if(arch->outputFormat == 0)
+				cout << "DataHazard detected for " << reg << " at " << DataHazards[reg].first << endl;
+		}
+		else
+		{
+			nextWhichLatch = DataHazards[reg].first + 1; //this will be either 4 or 5
+			if(arch->outputFormat == 0)
+				cout << "DataHazard detected for " << reg << " at " << DataHazards[reg].first << endl;
+		}
+		return false;
 	}
 	void stall()
 	{
@@ -197,15 +225,88 @@ struct ID
 			}
 			return;
 		}
-
+ 
 		if(curInstruction == 2)
 		{
-			//then we are in sw or lw, and there is no reason for any kinda stall to happen here
-			//what we must predict is where the DataHazard values will be when this instruction reaches EX and DM
+			//this is when we are in lw and sw, in this case for the address variable,
+			//a similar procedure would be done as in the case of R type registers
+			cout << curInstruction << ".";
+			pair<int,string> res = arch->decodeAddress(r[1]);    // we implemented a new function decodeAddress which correctly decodes as string and int 
+			dataValues[0] = res.first;
+			dataValues[1] = arch->registers[arch->registerMap[res.second]];	
+			dataValues[2] = arch->registers[arch->registerMap[r[0]]]; //here the sw thing happens
+			if(instructionType == "sw"){
+				if(arch->outputFormat == 0)
+					cout << " passed " << dataValues[2] << " for sw ";	
+			}
+			if(instructionType == "lw"){
+				L3->secondregister = res.second;
+				if(arch->outputFormat == 0)
+					cout << "Passed" << " "<< dataValues[1]<<"for lw";
+			}	
+			
+			//for dataValues[1] we might need to forward to ex for address calculation.
+			if(!DataHazards.count(res.second))
+			{
+				L3->nextWhichLatch[1] = 0; //because the value is generated here
+			}
+			else
+			{
+				//else its a dataHazard, there may be a stall required if the instruction was of I type and just before this one
+				if(calculateLatch(res.second, L3->nextWhichLatch[1])) //returns true if we are stalling and should return
+					return;
+			}
+			//the above handles the address calculation part. now for the case where sw is used with
+			//a dataHazard being stored into memory.
+			if(instructionType == "sw")
+			{
+				//then the first register may also be a dataHazard, right.
+				L3->nextWhichLatch[2] = 0; 
+				if(!DataHazards.count(r[0]))
+				{
+					//because the value is generated here
+				}
+				else if(DataHazards[r[0]].first < 5)
+				{
+					//else its a dataHazard, there may be a stall required if the instruction was of I type and just before this one
+					L3->nextWhichLatch[2] = DataHazards[r[0]].first; //this can either be 3 or 4
+					cout << "updated nextWhichLatch2 to " << DataHazards[r[0]].first;
+					//if this is 3, then we can take the value from L5 when we reach DM.
+					//if this is 4, then we can take the value from L5 when we reach EX.
+				}
+			}
+		}
+		else if(curInstruction == 0)
+		{
+			dataValues[0] = arch->registers[arch->registerMap[r[1]]];
+			dataValues[1] = arch->registers[arch->registerMap[r[2]]];
+			if(!DataHazards.count(r[1]))
+			{
+				L3->nextWhichLatch[0] = 0; //because the value is generated here
+			}
+			else
+			{
+				//else its a dataHazard, there may be a stall required if the instruction was of I type and just before this one
+				if(calculateLatch(r[1], L3->nextWhichLatch[0])) //returns true if we are stalling and should return
+					return;
+			}
+
+			if(!DataHazards.count(r[2]))
+			{
+				L3->nextWhichLatch[1] = 0; //because the value is generated here
+			}
+			else
+			{
+				//else its a dataHazard, there may be a stall required if the instruction was of I type and just before this one
+				if(calculateLatch(r[2], L3->nextWhichLatch[1])) //returns true if we are stalling and should return
+					return;
+			}
 		}
 		else if(curInstruction == 1)
 		{
 			//in this case, we have that
+			dataValues[0] = arch->registers[arch->registerMap[r[1]]];
+			dataValues[1] = stoi(r[2]);
 			L3->nextWhichLatch[1] = 0; //because the value is generated here
 			if(!DataHazards.count(r[1]))
 			{
@@ -214,28 +315,8 @@ struct ID
 			else
 			{
 				//else its a dataHazard, there may be a stall required if the instruction was of I type and just before this one
-				if(DataHazards[r[1]].first >= 5)
-				{
-					L3->nextWhichLatch[0] = 0; //as this will also be computed right here, no stalls required or forwarding
-				}
-				else if(DataHazards[r[1]].second == 1)
-				{
-					if(DataHazards[r[1]].first == 3)
-					{
-						//then we need to stall. 
-						if(arch->outputFormat == 0) cout << "stalling because I-R dependency";
-						stall();
-						return;
-					}
-					//else we do not need to stall it. where to take the values from
-					L3->nextWhichLatch[0] = 5; // it can only be 4.
-				}
-				else
-				{
-					L3->nextWhichLatch[0] = DataHazards[r[1]].first + 1; //this will be either 4 or 5
-				}
-				if(arch->outputFormat == 0)
-					cout << "DataHazard detected for " << r[1] << " at " << DataHazards[r[1]].first << endl;
+				if(calculateLatch(r[1], L3->nextWhichLatch[0])) //returns true if we are stalling and should return
+					return;
 			}
 		}
 		//Checking Dependencies first
@@ -262,6 +343,7 @@ struct ID
 			if(instructionType != "sw" && instructionType != "beq" && instructionType != "bne" && instructionType != "j")
 			{
 				DataHazards[r[0]].first = 2;
+				DataHazards[r[0]].second = (instructionType=="lw")? 1 : 0;
 			}
 			L2->IDisStalling = false;
 			isStalling = false; 
@@ -307,37 +389,7 @@ struct ID
 			L3->nextInstructionType = instructionType;
 			//return;
 		}
-		else if(curInstruction == 0) //then r2 and r3 need to be added/subtracted/whatever
-		{
-			dataValues[0] = arch->registers[arch->registerMap[r[1]]];
-			dataValues[1] = arch->registers[arch->registerMap[r[2]]];
-		}
-		else if(curInstruction == 1)
-		{
-			dataValues[0] = arch->registers[arch->registerMap[r[1]]];
-			dataValues[1] = stoi(r[2]); //since this in string form and not a register
-		}
-		else if(curInstruction == 2)//for lw and sw to be written LATER
-		{ 
-			pair<int,string> res = arch->decodeAddress(r[1]);    // we implemented a new function decodeAddress which correctly decodes as string and int 
-			dataValues[0] = res.first;
-			dataValues[1] = arch->registers[arch->registerMap[res.second]];	
-			dataValues[2] = arch->registers[arch->registerMap[r[0]]];
-			if(instructionType == "sw"){
-				if(arch->outputFormat == 0)
-					cout << " passed " << dataValues[2] << " for sw ";	
-			}
-			if(instructionType == "lw"){
-				L3->secondregister = res.second;
-				if(arch->outputFormat == 0)
-					cout << "Passed" << " "<<L3->secondregister <<"for lw";
-			}	
-		}
-		else
-		{
-			if(arch->outputFormat == 0)
-				cout << "Jumped to " << curCommand[1];
-		}
+		
 		if(!isStalling)
 			if(arch->outputFormat == 0)
 				cout << dataValues[0] << " and " << dataValues[1] << " "<<"PC="<< checkforPC;
@@ -375,8 +427,9 @@ struct EXDM //the latch between EX and DM L4
 	int curDataIn, nextDataIn;
 	int curMemWrite, nextMemWrite = 0;
 	bool curIsWorking = true, nextIsWorking = true;
-	int PC;
-	int PCrun;
+	int PC; int PCrun;
+	vector<int> curWhichLatch = vector<int>(3,0), nextWhichLatch = vector<int>(3,0);
+
 	void Update()
 	{
 		// curAddr = nextAddr; curReg = nextReg;
@@ -385,6 +438,8 @@ struct EXDM //the latch between EX and DM L4
 		PC = PCrun;
 		nextMemWrite = -1; curSWdata = nextSWdata;
 		nextReg = "";
+		curWhichLatch = nextWhichLatch; 
+		nextWhichLatch = vector<int>(3,0);
 		
 	}
 };
@@ -416,7 +471,7 @@ struct EX
 		L4->PCrun = checkforPC;
 		if(!isWorking)
 		{
-			L4->curIsWorking = false;
+			L4->nextIsWorking = false;
 			cout << isWorking;
 		}
 		if(iType == "")
@@ -434,13 +489,17 @@ struct EX
 		}
 		
 		dataValues = L3->curData; 
-		if(L3->curWhichLatch[0] != 0)
+		if(L3->curWhichLatch[0] > 0)
 		{
 			dataValues[0] = (L3->curWhichLatch[0] == 4)? L4->curDataIn : L5->curr_data;
 		}
-		if(L3->curWhichLatch[1] != 0)
+		if(L3->curWhichLatch[1] > 0)
 		{
-			dataValues[1] = (L3->curWhichLatch[0] == 4)? L4->curDataIn : L5->curr_data;
+			dataValues[1] = (L3->curWhichLatch[1] == 4)? L4->curDataIn : L5->curr_data;
+		}
+		if(L3->curWhichLatch[2] == 4)
+		{
+			dataValues[2] = L5->curr_data;
 		}
 		r1 = L3->curWriteReg; 
 		if(L3->curIsBranch > 0)
@@ -463,13 +522,14 @@ struct EX
 			return;
 		}
 		result = calc(); 
+		L4->nextWhichLatch = L3->curWhichLatch;
 		if(iType == "sw")
 		{
 			L4->nextSWdata = dataValues[2];
 		}
-		if(iType == "lw"){
-			dataValues[1] = arch->registers[arch->registerMap[L3->secondregister]];
-		}
+		// if(iType == "lw"){
+		// 	dataValues[1] = arch->registers[arch->registerMap[L3->secondregister]]; //suspect
+		// }
 		L4->nextReg = r1; L4->nextDataIn = result; 
 		L4->nextMemWrite = (iType == "sw")? 1 : (iType == "lw") ? 0 : -1;
 		if(iType!="sw" && iType !="lw"){
@@ -479,6 +539,7 @@ struct EX
 			if(arch->outputFormat == 0)
 				cout<<"address"<<dataValues[0] << " + " << dataValues[1] << "calculated"; 
 		}
+
 	}
 
 	int calc()
@@ -503,7 +564,6 @@ struct EX
 	}
 
 };
-
 struct DM
 {
 	public:
@@ -526,16 +586,22 @@ struct DM
 		isWorking = L4->curIsWorking;
 		checkforPc = L4->PC;
 		L5->PCrun = checkforPc;
+		if(arch->outputFormat == 0)
+			cout << " |DM|=> "; 
 		if(!isWorking)
 		{
 			L5->nextIsWorking = false;
+			return;
 		}
 		reg = L4->curReg; memWrite = L4->curMemWrite; dataIn = L4->curDataIn;
 		swData = L4->curSWdata;
-		if(arch->outputFormat == 0)
-			cout << " |DM|=> "; 
+		cout << "DM running";
 		//updated all the values using the latch L4
-
+		if(L4->curWhichLatch[2] == 3)
+		{
+			cout << "forwarded from L5";
+			swData = L5->curr_data; //forwarding the value from the L5 latch
+		}
 		if(reg == "")
 		{
 			L5->nextRegister = "";
@@ -576,7 +642,6 @@ struct DM
 	}
 
 };
-
 struct WB{
 	public:
 	bool isWorking = true;
@@ -604,7 +669,6 @@ struct WB{
 		}	
 	}
 };
-
 void HazardUpdate(int maxVal)
 	{
 		auto i = DataHazards.begin();
@@ -620,8 +684,6 @@ void HazardUpdate(int maxVal)
 			}
 		}
 	}
-
-
 void ExecutePipelined(MIPS_Architecture *arch)
 	{
 		if (arch->commands.size() >= arch->MAX / 4)
@@ -644,7 +706,7 @@ void ExecutePipelined(MIPS_Architecture *arch)
 		DM DataMemory(arch,&L4,&L5);
 		WB WriteBack(arch,&L5);
 
-		while(WriteBack.isWorking)
+		while(DataMemory.isWorking)
 		{
 			WriteBack.run(); //First half Cycle
 			Decode.run(); //Second Half Cycle, Decode running before IF so it can detect stalls and make IF stall
@@ -668,7 +730,7 @@ void ExecutePipelined(MIPS_Architecture *arch)
 				std::cout << " dataHazards are : ";
 				for(auto i: DataHazards)
 				{	
-					std::cout << i.first << " " << i.second.first << ", ";
+					std::cout << i.first << " " << i.second.first << ":" << i.second.second <<", ";
 				}
 			}
 			
@@ -680,7 +742,6 @@ void ExecutePipelined(MIPS_Architecture *arch)
 		arch->handleExit(arch->SUCCESS, clockCycles);
 
 	}
-
 //here the commands are being actually executed.
 int main(int argc, char *argv[])
 {

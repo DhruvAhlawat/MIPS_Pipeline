@@ -350,7 +350,7 @@ struct EX
 		L4->PCrun = checkforPC;
 		if(!isWorking)
 		{
-			L4->curIsWorking = false;
+			L4->nextIsWorking = false; //updated this
 			cout << isWorking;
 		}
 		if(iType == "")
@@ -373,9 +373,9 @@ struct EX
 		{
 			L4->nextSWdata = dataValues[2];
 		}
-		if(iType == "lw"){
-			dataValues[1] = arch->registers[arch->registerMap[L3->secondregister]];
-		}
+		// if(iType == "lw"){
+		// 	dataValues[1] = arch->registers[arch->registerMap[L3->secondregister]];
+		// }
 		L4->nextReg = r1; L4->nextDataIn = result; 
 		L4->nextMemWrite = (iType == "sw")? 1 : (iType == "lw") ? 0 : -1;
 		if(iType!="sw" && iType !="lw"){
@@ -564,7 +564,7 @@ void ExecutePipelined(MIPS_Architecture *arch)
 		DM DataMemory(arch,&L4,&L5);
 		WB WriteBack(arch,&L5);
 
-		while(WriteBack.isWorking)
+		while(DataMemory.isWorking)
 		{
 			WriteBack.run(); //First half Cycle
 			Decode.run(); //Second Half Cycle, Decode running before IF so it can detect stalls and make IF stall
