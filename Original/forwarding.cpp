@@ -562,7 +562,7 @@ struct MIPS_Architecture
 			//Checking Dependencies first
 			//Forwarding logic  
 			//additional condition added are r[1] should not be $0 because it might be possible its count became non-zero in the datahazard
-			if(instructionType=="bne" || instructionType=="beq"){
+			else if(instructionType=="bne" || instructionType=="beq"){
 				L3->label = r[2];
 				r[2] = r[1];
 				r[1] = r[0];
@@ -573,23 +573,24 @@ struct MIPS_Architecture
 			      stall();
 				  if(arch->outputFormat == 0)
 				  cout<<"register1*";
-				  arch->DataHazards[r[1]].first = 4;
+				  //arch->DataHazards[r[1]].first = 4; //why is this happening? CHANGED
                   return;}
 			if(arch->DataHazards.count(r[2])>0 && arch->DataHazards[r[2]].first>0 && arch->DataHazards[r[2]].first < arch->DataHazards[r[2]].second + 4){
-                stall();
-				arch->DataHazards[r[2]].first = 4;
+                stall(); //gotta stall in these cases
+				//arch->DataHazards[r[2]].first = 4; //Why?? CHANGED
 				if(arch->outputFormat == 0)
-				cout<<"register2*";
+					cout<<"register2*";
 				return;}
+
 			if((instructionType == "beq" || instructionType == "bne")){
 
                 if(arch->DataHazards.count(r[0])>0 && arch->DataHazards[r[0]].first < 5){  //checking for r[0] dependency
-                arch->DataHazards[r[0]].first = 3;
+                	//	arch->DataHazards[r[0]].first = 3; //weird change ova here but ok CHANGED
 				if(arch->outputFormat == 0)
-                cout<<"register1";
+                	cout<<"register1";
                 }
                 if( arch->DataHazards.count(r[1])>0 && arch->DataHazards[r[1]].first < 5){  // cheking for r[1] dependency
-                    arch->DataHazards[r[1]].first = 3; 
+                    //arch->DataHazards[r[1]].first = 3;  no reason to update the dependency here CHANGED
 					if(arch->outputFormat == 0)
                     cout<<"register2";
                 }
@@ -597,12 +598,12 @@ struct MIPS_Architecture
             }
             if(arch->DataHazards.count(r[1])>0 && arch->DataHazards[r[1]].first < 5 && r[1]!="$0")
 			{
-				 arch->DataHazards[r[1]].first = 3;  
-				 if(arch->outputFormat == 0)
-                cout<<"do forwarding1"<<" ";
+				//arch->DataHazards[r[1]].first = 3;  //why is this happening? CHANGED
+				if(arch->outputFormat == 0)
+                	cout<<"do forwarding1"<<" ";
 			}
             if((arch->DataHazards.count(r[2])>0 && arch->DataHazards[r[2]].first < 5)){
-                arch->DataHazards[r[2]].first = 3;
+                //arch->DataHazards[r[2]].first = 3; //why is this happening? CHANGED
 				if(arch->outputFormat == 0)
                 cout<<"do forwarding2"<<" ";
             }
@@ -613,14 +614,14 @@ struct MIPS_Architecture
 				if(arch->outputFormat == 0)
 				cout<<"do store forwarding1"<<" ";
 				L3->isStoreforward1 = true;
-				 arch->DataHazards[r[0]].first = 3;
+				//arch->DataHazards[r[0]].first = 3; 
 				}
 		  if(arch->DataHazards.count(arch->decodeAddress(r[1]).second)>0 && arch->DataHazards[arch->decodeAddress(r[1]).second].first < 5){
 			//there might be possible that 8(r1) in which r1 has a dependency
 			if(arch->outputFormat == 0)
             cout<<"do store forwarding2"<<" ";
 			L3->isStoreforward2 = true;
-			arch->DataHazards[res.second].first = 3;
+			// arch->DataHazards[res.second].first = 3;
 		  }
 		   L3->intermediate1 =res.second;
 		  L3->intermediate2 ="";
