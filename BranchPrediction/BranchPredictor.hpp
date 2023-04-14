@@ -77,8 +77,11 @@ struct BHRBranchPredictor : public BranchPredictor {
         int ind = bhr.to_ulong();
         if(taken)
         {
-            if(bhrTable[ind].count() == 2) return; //if both are already 1
-            if(bhrTable[ind][0] == 1) //01 goes to 10
+            if(bhrTable[ind].count() == 2) 
+            {
+                //do nothing
+            } //if both are already 1
+            else if(bhrTable[ind][0] == 1) //01 goes to 10
             {
                 bhrTable[ind][0].flip(); bhrTable[ind][1].flip();
             }
@@ -89,8 +92,11 @@ struct BHRBranchPredictor : public BranchPredictor {
         }
         else
         {
-            if(bhrTable[ind].count() == 0) return; //if both are already 0
-            if(bhrTable[ind][0] == 1) //01 or 11 goes to 00 or 10
+            if(bhrTable[ind].count() == 0)
+            {
+
+            } //if both are already 0
+            else if(bhrTable[ind][0] == 1) //01 or 11 goes to 00 or 10
             {
                 bhrTable[ind][0].flip(); //updating this bit to 0
             }

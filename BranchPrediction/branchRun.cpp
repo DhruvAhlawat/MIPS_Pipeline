@@ -42,7 +42,7 @@ int main()
                 total++;
                 uint32_t index  = getLeast14(a);
                 bool prediction = counters.predict(index);
-                outfile << "Prediction for " << a << ":" << index << " is =>" << prediction << " at state " << b << " which is ";
+                outfile << "Prediction for " << a << ":" << index << " is =>" << prediction << " at state " << counters.bhr[1] << counters.bhr[0] << " which is ";
                 branchtrace >> b;
                 if( b == prediction)
                 {
