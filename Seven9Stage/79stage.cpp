@@ -396,6 +396,7 @@ struct RR
 			L5i->nextWriteReg = writeReg;
 			L5i->nextData = regVal; //passing the data to ALU of the i type (9 stage) instruction
 			L5i->nextCommand = curCommand; 
+			if(arch->outputFormat == 0)
 			cout << curCommand[0] << " " << nextOffset << "+" << regVal[0] << "for " << curCommand[1] <<":" << regVal[2] ; // << "data-" <<  << " ";
 		}
 		else
@@ -484,13 +485,14 @@ struct DM1
 {
 	MIPS_Architecture *arch;
 	EXDM *L8; LWB *L6; int Addr = 0;
-	string writeReg = "";
+	string writeReg = ""; bool memWrite = false;
 	DM1(MIPS_Architecture *architecture, EXDM *l8, LWB *l6)
 	{
 		arch = architecture; L8 = l8; L6 = l6;
 	}
 	void run()
 	{
+		memWrite = false;
 		if(arch->outputFormat==0)
 			cout << "|DM1|=>";
 
@@ -499,6 +501,7 @@ struct DM1
 			// L6->nextIsWorking = false;
 			return;
 		}
+		memWrite = (L8->curCommand[0] == "sw");
 		Addr = L8->curAddr;
 		L6->nextPC = L8->curPC;
 		if(L8->curCommand[0] == "lw")
@@ -748,10 +751,21 @@ void ExecutePipelined(MIPS_Architecture *arch)
 				{	
 					std::cout << i.first << " " << i.second.first <<   ", ";
 				}
+			}	
+			clockCycles++;
+			arch->printRegisters(clockCycles);
+
+			if(dataMem1.memWrite)
+			{
+				cout << 1 << " "<< dataMem1.Addr << " " << dataMem1.L8->curSWdata;
+			}
+			else
+			{
+				cout << 0;
 			}
 			
 			HazardUpdate(8); //updating the hazards
-			clockCycles++;
+		
 			if(arch->outputFormat == 0)
 			{
 				cout << "^";
@@ -761,7 +775,6 @@ void ExecutePipelined(MIPS_Architecture *arch)
 				}
 			}
 			
-			arch->printRegisters(clockCycles);
 			//cout << endl << " at clockCycles " << clockCycles << endl;
 			std::cout << endl;
 			
