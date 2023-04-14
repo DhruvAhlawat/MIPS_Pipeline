@@ -125,7 +125,7 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
         cout << "yoyo";
         int ind = (pc & 16383); 
         int index  = table[ind].to_ulong();
-        double x = 0.5;
+        double x = 0.3;
         double y = ((double)(bhrTable[bhr.to_ulong()].to_ulong())*x + (1-x)*((double)index));
         if(y >= 1.5){
             return true;
@@ -139,7 +139,7 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
         //     return false;
     }
     void update(uint32_t pc, bool taken) {
-          cout << "HELLO";
+          //cout << "HELLO";
         int index = (pc & 16383);
         if(taken)
         {
@@ -193,7 +193,7 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
             }
         }
         bhr[1] = bhr[0];
-        bhr[0] = taken ? 0 : 1;
+        bhr[0] = taken ? 1: 0;
     } 
 };
 
