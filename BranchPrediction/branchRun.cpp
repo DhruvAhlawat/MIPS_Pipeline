@@ -17,11 +17,11 @@ int getLeast14(std::string hex)
 }
 int main()
 {
-    string cntOut[4] = {"cnt00.txt", "cnt01.txt", "cnt10.txt","cnt11.txt"};
+    string cntOut[4] = {"bhr00.txt", "bhr01.txt", "bhr10.txt","bhr11.txt"};
     for (int i = 0; i < 4; i++)
     {
         int initialValueOfCounter = i; //makes an array of 2^14 counters with the given starting state
-        SaturatingBranchPredictor counters = (SaturatingBranchPredictor(initialValueOfCounter));
+        BHRBranchPredictor counters = (BHRBranchPredictor(initialValueOfCounter));
         ifstream branchtrace; 
         branchtrace.open("branchtrace.txt");
         ofstream outfile(cntOut[i]);
@@ -67,4 +67,7 @@ int main()
         outfile.close();
         branchtrace.close(); 
     }
+
+
+
 }

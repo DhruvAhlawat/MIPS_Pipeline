@@ -64,14 +64,44 @@ struct BHRBranchPredictor : public BranchPredictor {
     std::vector<std::bitset<2>> bhrTable;
     std::bitset<2> bhr;
     BHRBranchPredictor(int value) : bhrTable(1 << 2, value), bhr(value) {}
-
     bool predict(uint32_t pc) {
-        // your code here
-        return false;
+        int ind = bhr.to_ulong();
+        if(bhrTable[ind][1] == 1)
+            return true;
+        else
+            return false;
     }
 
-    void update(uint32_t pc, bool taken) {
-        // your code here
+    void update(uint32_t pc, bool taken)
+    {
+        int ind = bhr.to_ulong();
+        if(taken)
+        {
+            if(bhrTable[ind].count() == 2) return; //if both are already 1
+            if(bhrTable[ind][0] == 1) //01 goes to 10
+            {
+                bhrTable[ind][0].flip(); bhrTable[ind][1].flip();
+            }
+            else //00 goes to 01, 10 goes to 11
+            {
+                bhrTable[ind][0].flip(); //updating this bit to 1
+            }
+        }
+        else
+        {
+            if(bhrTable[ind].count() == 0) return; //if both are already 0
+            if(bhrTable[ind][0] == 1) //01 or 11 goes to 00 or 10
+            {
+                bhrTable[ind][0].flip(); //updating this bit to 0
+            }
+            else //10 goes to 01 (00 case is not there as its already taken care of)
+            {
+                bhrTable[ind][0].flip(); bhrTable[ind][1].flip();
+            }
+        }
+
+        bhr[1] = bhr[0]; //moved the 1st bit to 2nd bit, and updated the second bit based on taken
+        bhr[0] = (taken)? 1 : 0;
     }
 };
 
