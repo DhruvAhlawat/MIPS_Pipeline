@@ -356,17 +356,16 @@ struct ID
 			}
 		}
 
-		{	
-			if(arch->outputFormat == 0)
-				cout << " decoded " << instructionType << " ";
-			if(instructionType != "sw" && instructionType != "beq" && instructionType != "bne" && instructionType != "j")
-			{
-				DataHazards[r[0]].first = 2;
-				DataHazards[r[0]].second = (instructionType=="lw")? 1 : 0;
-			}
-			L2->IDisStalling = false;
-			isStalling = false; 
+		
+		if(arch->outputFormat == 0)
+			cout << " decoded " << instructionType << " ";
+		if(instructionType != "sw" && instructionType != "beq" && instructionType != "bne" && instructionType != "j")
+		{
+			DataHazards[r[0]].first = 2;
+			DataHazards[r[0]].second = (instructionType=="lw")? 1 : 0;
 		}
+		L2->IDisStalling = false;
+		isStalling = false; 
 	
 		if(!isStalling)
 			if(arch->outputFormat == 0)

@@ -18,7 +18,7 @@ using namespace std;
 struct MIPS_Architecture
 {
 	public:
-	int outputFormat = 1; //output format = 0 is the output format we used for debugging, it shows what each stage is doing at every cycle, and which PC is being executed
+	int outputFormat = 0; //output format = 0 is the output format we used for debugging, it shows what each stage is doing at every cycle, and which PC is being executed
 	//in each stage. output format = 1 is the output format we used for the final submission, it shows the value of each register at every cycle.
 
 	int registers[32] = {0}, PCcurr = 0, PCnext = 0;
