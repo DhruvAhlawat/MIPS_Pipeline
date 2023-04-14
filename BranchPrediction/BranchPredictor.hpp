@@ -46,7 +46,7 @@ struct SaturatingBranchPredictor : public BranchPredictor {
         }
         else
         {
-            if(table[index].count() == 0) return; //if both are already 0
+            if(table[index].count() == 0) return; //if both are already 0 return s the number bit whih are set
             if(table[index][0] == 1) //01 or 11 goes to 00 or 10
             {
                 table[index][0].flip(); //updating this bit to 0
@@ -64,7 +64,7 @@ struct BHRBranchPredictor : public BranchPredictor {
     std::vector<std::bitset<2>> bhrTable;
     std::bitset<2> bhr;
     BHRBranchPredictor(int value) : bhrTable(1 << 2, value), bhr(value) {}
-    bool predict(uint32_t pc) {
+    bool predict(uint32_t pc) {  //we don't require the the p for indexing 
         int ind = bhr.to_ulong();
         if(bhrTable[ind][1] == 1)
             return true;
@@ -120,14 +120,56 @@ struct SaturatingBHRBranchPredictor : public BranchPredictor {
         assert(size <= (1 << 16));
     }
 
-    bool predict(uint32_t pc) {
-        // your code here
-        return false;
+    bool predict(uint32_t pc) 
+    {
+        int ind = (pc & 16383); 
+        int index  = table[ind].to_ulong();
+        double x = 0.3;
+        double y = ((double(bhrTable[bhr.to_ulong()].to_ulong())*x + (1-x)*((double)index)) /2);
+        
+        
+        
+        if(combination[4*ind + index][1] == 1)
+            return true;
+        else
+            return false;
     }
-
     void update(uint32_t pc, bool taken) {
-        // your code here
-    }
+        int ind = (pc & 16383);
+        int index = table[ind].to_ulong();
+        if(taken)
+        {
+            if(combination[4*ind + index].count() == 2) 
+            {
+                //do nothing
+            } //if both are already 1
+            else if(combination[4*ind + index][0] == 1) //01 goes to 10
+            {
+                combination[4*ind + index][0].flip(); combination[4*ind + index][1].flip();
+            }
+            else //00 goes to 01, 10 goes to 11
+            {
+                combination[4*ind + index][0].flip(); //updating this bit to 1
+            }
+        }
+        else
+        {
+            if(combination[4*ind + index].count() == 0)
+            {
+
+            } //if both are already 0
+            else if(combination[4*ind + index][0] == 1) //01 or 11 goes to 00 or 10
+            {
+                combination[4*ind + index][0].flip(); //updating this bit to 0
+            }
+            else //10 goes to 01 (00 case is not there as its already taken care of)
+            {
+                combination[4*ind + index][0].flip(); combination[4*ind + index][1].flip();
+            }
+        }
+        table[ind][1] = table[ind][0]; //moved the 1st bit to 2nd bit, and updated the second bit based on taken
+        table[ind][0] = (taken)? 1 : 0;
+    } 
 };
 
 
