@@ -311,9 +311,9 @@ struct MIPS_Architecture
 			return 0;
 		else if(s == "addi" || s == "andi" || s == "ori" || s == "srl" || s == "sll")
 			return 1;
-		else if(s == "lw" || s == "sw")
+		else if(s == "lw" || s == "sw") //I type₹
 			return 2;
-		return 3;
+		return 3; //branch/jump type instructions
 	}
 	// parse the command assuming correctly formatted MIPS instruction (or label)
 	void parseCommand(std::string line)
