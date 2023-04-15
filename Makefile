@@ -1,32 +1,42 @@
 all: run5 run79
 
-./FiveStage/5stage.exe: ./FiveStage/5stage.cpp 
+5stageFinal: ./5stage.cpp ./MIPS_Processor.hpp
 	g++ -I C:/Users/tripl/Documents/boost_1_62_0/boost_1_62_0 -I .  .\FiveStage\5stage.cpp -o .\FiveStage\5stage
 
-./FiveStage/5stage_bypass.exe: ./FiveStage/5stage_bypass.cpp ./MIPS_Processor.hpp
+5stage_bypassFinal: ./5stage_bypass.cpp ./MIPS_Processor.hpp
 	g++ -I C:/Users/tripl/Documents/boost_1_62_0/boost_1_62_0 -I .  .\FiveStage\5stage_bypass.cpp -o .\FiveStage\5stage_bypass
 
-bypass: ./FiveStage/5stage_bypass.exe ./FiveStage/5stage_bypass.cpp 
-	./FiveStage/5stage_bypass.exe "sample.asm"
+bypass: ./5stage_bypassFinal ./5stage_bypass.cpp 
+	./FiveStage/5stage_bypass.exe "input.asm"
 
 
-run5: ./FiveStage/5stage.exe ./FiveStage/5stage.cpp
-	./FiveStage/5stage.exe "sample.asm"
+run5: ./5stageFinal ./5stage.cpp
+	./FiveStage/5stage.exe "input.asm"
 
 
-./Seven9Stage/79stage.exe: ./Seven9Stage/79stage.cpp MIPS_Processor.hpp
-	g++ -I C:/Users/tripl/Documents/boost_1_62_0/boost_1_62_0 -I . ./Seven9Stage/79stage.cpp  -o .\Seven9Stage\79stage
+79stageFinal: ./Seven9Stage/79stage.cpp MIPS_Processor.hpp
+	g++ -I C:/Users/tripl/Documents/boost_1_62_0/boost_1_62_0 -I . .\79stage.cpp  -o .\79stageFinal
 
-run79: ./Seven9Stage/79stage.exe ./Seven9Stage/79stage.cpp MIPS_Processor.hpp
-	./Seven9Stage/79stage.exe "sample.asm"
+run79: ./79stageFinal ./79stage.cpp 
+	./79stageFinal "input.asm"
 
 ./Original/forwarding.exe: ./Original/forwarding.cpp MIPS_Processor.hpp
 	g++ -I C:/Users/tripl/Documents/boost_1_62_0/boost_1_62_0 ./Original/sample.cpp ./Original/forwarding.cpp  -o .\Original\forwarding
 
 
+compile: 
+	g++ -I . ./5stage.cpp -o ./5stageFinal
+	g++ -I . ./79stage.cpp -o ./79stageFinal
+	g++ -I . ./5stage_bypass.cpp -o ./5stage_bypassFinal
 
-forwardRun: ./Original/forwarding.exe ./Original/forwarding.cpp MIPS_Processor.hpp
-	./Original/forwarding.exe "sample.asm"
+run_5stage: 
+	./5stageFinal "input.asm"
+
+run_5stage_bypass:
+	./5stage_bypassFinal "input.asm"
+
+run_79stage:
+	./79stageFinal "input.asm"
 
 clean:
-	rm ./FiveStage/5stage.exe ./Seven9Stage/79stage.exe
+	rm ./5stageFinal ./5stage_bypassFinal ./79stageFinal
